@@ -14,7 +14,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "0.1.4";
+  const VERSION = "0.1.5";
   const TAG = "glass-remote-card";
   const PICK_KEY = "glass-remote-card:pick:";
 
@@ -572,12 +572,12 @@
     .mic { position: absolute; right: 10px; top: calc(10% + 54px); width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; --s: 19px; z-index: 2; }
     /* bottom row inside the pad, always shown, like Apple's iOS Remote: sources | -10 | (...) | +10 | CH.
        The row only catches taps on its own buttons, so the rest of the pad stays a touchpad.
-       0.1.4 (Grok Bot, 11 Oct 2026): proportions from Apple's screenshots (five equal columns, icons ~27px
+       0.1.4/0.1.5 (Grok Bot, 11 Oct 2026): proportions from Apple's screenshots (five equal columns, icons ~27px
        centred ~35px above the pad's bottom edge). CH: collapsed = "CH" in the row with thin caps hugging it;
        open = the caps slide out and turn into chevrons, CH rises: up chevron, CH, down chevron (~33px pitch). */
-    .inner { position: absolute; left: 6px; right: 6px; bottom: 13px; display: grid; grid-template-columns: repeat(5, 1fr);
+    .inner { position: absolute; left: 6px; right: 6px; bottom: 16px; display: grid; grid-template-columns: repeat(5, 1fr);
       justify-items: center; align-items: end; z-index: 2; pointer-events: none; }
-    .inner > button { padding: 8px; --s: 28px; pointer-events: auto; }
+    .inner > button { width: 44px; height: 44px; padding: 0; display: grid; place-items: center; --s: 28px; pointer-events: auto; } /* 0.1.5: fixed 44px boxes so every slot shares one centre line (Grok Bot, 11 Oct 2026) */
     .inner .src, .inner .more { --s: 27px; opacity: .92; }
     .inner .gone { visibility: hidden; pointer-events: none; }
     .ch { position: relative; width: 44px; height: 44px; pointer-events: none; --ch-ease: cubic-bezier(.3,.9,.3,1.06); }

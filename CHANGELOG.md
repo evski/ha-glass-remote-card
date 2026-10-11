@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.5] - unreleased
+
+### Fixed
+- The collapsed CH control (CH with its caps) sat a few pixels below the list, -10, ⋯ and +10 icons. The row's buttons are now fixed 44 px boxes with their icons centred, the same as the CH slot, so everything shares one centre line, as on Apple's remote. The row sits about 38 px above the pad's bottom edge, as on Apple's.
+
 ## [0.1.4] - unreleased
 
 ### Changed

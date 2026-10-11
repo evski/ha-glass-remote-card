@@ -397,6 +397,12 @@ function ptr(w, el, type, x = 100, y = 100) {
     b.$(".chl").click(); await sleep(50);
     check("CH15 channel_timeout: 0 -> stays open, no timer", b.$(".ch").classList.contains("open") && !b.card._db_ch);
     b.card.remove();
+    {
+      const st = mount(w, CONFIG(), states()); const cssT = st.$("style").textContent; st.card.remove();
+      check("CH17 collapsed CH shares the row's centre line: row buttons and the CH slot are both fixed 44px boxes, CH parts centred on it (0.1.5)",
+        /\.inner > button \{ width: 44px; height: 44px; padding: 0; display: grid; place-items: center;/.test(cssT) && /\.ch \{ position: relative; width: 44px; height: 44px;/.test(cssT)
+        && /\.ch \.chb\.up \{ transform: translateY\(-14px\)/.test(cssT) && /\.ch \.chb\.dn \{ transform: translateY\(14px\)/.test(cssT) && /\.ch > button \{ position: absolute; left: 50%; top: 50%;/.test(cssT));
+    }
     check("CH16 channel_timeout validation + default 5000", bad({ ...CONFIG(), channel_timeout: "5s" }) && bad({ ...CONFIG(), channel_timeout: -1 }) && H.normaliseConfig(CONFIG()).channel_timeout === 5000);
     w.localStorage.clear();
   }
