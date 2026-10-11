@@ -1,6 +1,6 @@
 {
   "name": "ha-glass-remote-card",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Frosted-glass touchpad remote card for Home Assistant. Follows whatever you're watching: Kodi, LG webOS, the Apple TV integration or any media_player. Touchpad, volume, keyboard and dictation. Single file, no dependencies. HACS plugin.",
   "private": true,
   "main": "glass-remote-card.js",

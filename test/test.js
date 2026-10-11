@@ -334,9 +334,10 @@ function ptr(w, el, type, x = 100, y = 100) {
   w.localStorage.clear();
   const dcfg = CONFIG(); dcfg.players[1].sources = { entity: "media_player.avr", include: [{ UHD: "Kodi" }, { PVR: "Apple TV" }] };
   m = mount(w, dcfg, AVRS);
-  check("O8 bottom row order: sources | -10 | ... | +10 | CH", eq([...m.$(".inner").children].map((e) => e.className.split(" ")[0] || e.dataset.key), ["src", "skip_back", "more", "skip_fwd", "ch"]));
+  check("O8 bottom row order: sources | -10 | ... | +10 | info/CH (0.2.1: Info and CH share the 5th slot)", eq([...m.$(".inner").children].map((e) => e.className.split(" ")[0] || e.dataset.key), ["src", "skip_back", "more", "skip_fwd", "infob", "ch"]));
   check("O9 Kodi: CH slot hidden, sources + more shown", m.$(".ch").classList.contains("gone") && !m.$(".src").classList.contains("gone") && !m.$(".more").classList.contains("gone"));
-  check("O10 no separate info/subtitle buttons, mic hidden by default", !m.$('.inner [data-key="info"]') && m.$(".mic").style.display === "none");
+  // 0.2.1 (Grok Bot, 11 Oct 2026): O10 used to assert there was NO info button; that was the regression Evan hit
+  check("O10 Kodi: Info button in the row (no separate subtitles button), mic hidden by default", !!m.$('.inner [data-key="info"]') && !m.$(".inner .infob").classList.contains("gone") && !m.$('.inner [data-key="subtitles"]') && m.$(".mic").style.display === "none");
   m.$(".src").click(); await sleep(10);
   const mis = [...m.card.shadowRoot.querySelectorAll(".menu .mi")];
   check("O11 sources menu lists renamed sources, ticks the current one", m.$(".menu-bg").classList.contains("show") && eq(mis.map((b) => b.textContent), ["Kodi", "\u2713Apple TV"]), mis.map((b) => b.textContent));
@@ -380,7 +381,7 @@ function ptr(w, el, type, x = 100, y = 100) {
     w.localStorage.clear();
     b = mount(w, { ...CONFIG(), channel_timeout: 300 }, states()); b.card._writePick("media_player.lr_appletv"); b.card.hass = { ...b.hass, states: states() };
     const ch = () => b.$(".ch"), chl = () => b.$(".chl");
-    check("CH5 apple_tv: CH shown collapsed, in the row's 5th slot", !ch().classList.contains("gone") && !ch().classList.contains("open") && chl().textContent === "CH" && [...b.$(".inner").children].indexOf(ch()) === 4 && chl().getAttribute("aria-expanded") === "false");
+    check("CH5 apple_tv: CH shown collapsed, in the row's 5th slot", !ch().classList.contains("gone") && !ch().classList.contains("open") && chl().textContent === "CH" && [...b.$(".inner").children].indexOf(ch()) === 5 && b.$(".inner .infob").classList.contains("gone") && chl().getAttribute("aria-expanded") === "false");
     check("CH6 each chevron button holds a thin cap and a chevron", b.card.shadowRoot.querySelectorAll(".ch .chb .cap").length === 2 && b.card.shadowRoot.querySelectorAll(".ch .chb .chev").length === 2);
     check("CH7 collapsed: chevron buttons don't take taps; open: they do, and they animate (transitions)", /\.ch \.chb \{[^}]*pointer-events: none/.test(css()) && /\.ch\.open \.chb \{[^}]*pointer-events: auto/.test(css()) && /\.ch > button \{[^}]*transition: transform \.22s/.test(css()) && /\.ch \.chb path \{[^}]*transition: opacity/.test(css()));
     check("CH8 open stack rises above the row: up above CH above down", /\.ch\.open \.chb\.up \{ transform: translateY\(-73px\)/.test(css()) && /\.ch\.open \.chl \{ transform: translateY\(-40px\)/.test(css()) && /\.ch\.open \.chb\.dn \{ transform: translateY\(-7px\)/.test(css()));
@@ -837,6 +838,37 @@ function ptr(w, el, type, x = 100, y = 100) {
       !f.$(".more").classList.contains("gone") && rows.length === 1 && rows[0].querySelector(".nm").textContent === "My List" && !rows[0].classList.contains("grp"));
     f.card.remove(); w.localStorage.clear();
     check("SC20 no add-on names in the card code (shortcuts are generic)", !/umbrella|trakt/i.test(SRC_NOW()));
+  }
+
+  // ---- IB: Info button on the pad's bottom row (0.2.1, Grok Bot 11 Oct 2026) -----------------------------
+  // Regression: Evan "We've lost the info button?" - on Kodi, Info was only reachable inside More and the
+  // row's 5th slot was empty. Info must sit in that slot whenever CH doesn't, and send the player's info key.
+  {
+    w.localStorage.clear();
+    let f = mount(w, CONFIG(), states());
+    const ib = () => f.$('.inner [data-key="info"]');
+    check("IB1 Kodi active: Info button on the bottom row, visible", f.card.activeEntity === "media_player.kodi" && !!ib() && !ib().classList.contains("gone") && f.$(".ch").classList.contains("gone"));
+    f.hass.calls.length = 0;
+    ptr(w, ib(), "pointerdown"); ptr(w, ib(), "pointerup"); await sleep(50);
+    check("IB2 Kodi Info button sends kodi.call_method Input.Info", f.hass.calls.some((c) => c[0] === "kodi" && c[1] === "call_method" && c[2].method === "Input.Info" && c[2].entity_id === "media_player.kodi"), f.hass.calls);
+    const box = f.$(".inner"), kids = [...box.children].filter((el) => !el.classList.contains("gone"));
+    check("IB3 Info is the right-hand slot (sources | -10 | more | +10 | info)", kids[kids.length - 1] === ib(), kids.map((k) => k.className));
+    f.$(".more").click(); await sleep(10);
+    check("IB4 Kodi More menu still lists Info", [...f.card.shadowRoot.querySelectorAll(".menu .mi .nm")].some((n) => n.textContent === "Info"));
+    f.card.remove(); w.localStorage.clear();
+    // players with CH keep CH in that slot and Info stays in More
+    f = mount(w, CONFIG(), states({ "media_player.kodi": { state: "idle" }, "media_player.lr_tv": { attributes: { source: "Apple TV" } } }));
+    check("IB5 Apple TV active: CH shown, no row Info", f.card.activeEntity === "media_player.lr_appletv" && !f.$(".ch").classList.contains("gone") && ib().classList.contains("gone"));
+    f.card.remove(); w.localStorage.clear();
+    const cfgOff = CONFIG(); cfgOff.players[1].info_button = false;
+    f = mount(w, cfgOff, states());
+    check("IB6 info_button: false hides it on Kodi", f.card.activeEntity === "media_player.kodi" && ib().classList.contains("gone"));
+    f.card.remove(); w.localStorage.clear();
+    let threw = false; try { H.normaliseConfig({ players: [{ entity: "media_player.kodi", platform: "kodi", info_button: "yes" }] }); } catch (_) { threw = true; }
+    check("IB7 info_button must be true or false", threw);
+    check("IB8 helper: Kodi yes, webOS (CH) no, generic without remote no",
+      H.hasInfoButton({ entity: "media_player.k", platform: "kodi" }, {}) && !H.hasInfoButton({ entity: "media_player.t", platform: "webostv" }, {}) &&
+      !H.hasInfoButton({ entity: "media_player.g", platform: "generic" }, {}));
   }
 
   // URL pick (Sidebar Mini Player remote_path: /remote?player={entity})

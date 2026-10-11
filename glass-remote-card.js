@@ -59,11 +59,17 @@
  * ({text_url} / {{ text | urlencode }} = URL-encoded, for plugin URLs). A "call" shortcut runs straight away.
  * Why: Evan wanted add-on searches and list shortcuts on the remote for Kodi, configurable rather than built
  * in, and without new buttons on the remote. Nothing in the code knows about any particular add-on.
+ * 0.2.1 (Grok Bot, 11 Oct 2026): Info button back on the pad's bottom row. What: on players without a CH
+ * control (Kodi by default), the empty 5th slot of the row (sources | -10 | more | +10 | _) now holds an
+ * Info (i) button that sends the player's info key (Kodi Input.Info). Players with CH keep CH there; Info stays
+ * in their More menu (and in Kodi's too). `info_button: false` on a player hides it. Why: Evan: "We've lost the
+ * info button?". The Remote dashboard had -10 | info | subtitles | +10 in the pad before it moved to this card;
+ * 0.1.1's bottom row put Info inside More, so on Kodi it took two taps and the right-hand slot sat empty.
  */
 (() => {
   "use strict";
 
-  const VERSION = "0.2.0";
+  const VERSION = "0.2.1";
   const TAG = "glass-remote-card";
   const PICK_KEY = "glass-remote-card:pick:";
 
@@ -288,6 +294,7 @@
         throw new Error(`glass-remote-card: players[${i}].keyboard_poll must be milliseconds (0 = off)`);
       if (p.channels !== undefined && typeof p.channels !== "boolean") throw new Error(`glass-remote-card: players[${i}].channels must be true or false`);
       if (p.shortcuts !== undefined) p.shortcuts = normaliseShortcuts(p.shortcuts, i); // 0.2.0 (Grok Bot, 11 Oct 2026)
+      if (p.info_button !== undefined && typeof p.info_button !== "boolean") throw new Error(`glass-remote-card: players[${i}].info_button must be true or false`); // 0.2.1
       return p;
     });
     const out = {
@@ -523,6 +530,8 @@
   }
   const shortcutsFor = (p) => (p && Array.isArray(p.shortcuts) ? p.shortcuts : []);
 
+  // 0.2.1 (Grok Bot, 11 Oct 2026): Info sits in the row's 5th slot when CH doesn't use it and the player has an info key
+  const hasInfoButton = (p, states) => p.info_button !== false && !hasChannels(p) && stepsFor(p, "info", states || {}).length > 0;
   const hasChannels = (p) => !!(p.channels === undefined ? PLATFORMS[p.platform].channels : p.channels) &&
     !!(PLATFORMS[p.platform].keys.channel_up || (p.actions && p.actions.channel_up));
 
@@ -719,6 +728,9 @@
     .inner > button { width: 44px; height: 44px; padding: 0; display: grid; place-items: center; --s: 28px; pointer-events: auto; } /* 0.1.5: fixed 44px boxes so every slot shares one centre line (Grok Bot, 11 Oct 2026) */
     .inner .src, .inner .more { --s: 27px; opacity: .92; }
     .inner .gone { visibility: hidden; pointer-events: none; }
+    /* 0.2.1 (Grok Bot, 11 Oct 2026): CH and Info share the 5th column; only one of them is shown */
+    .inner .ch, .inner .infob { grid-column: 5; grid-row: 1; }
+    .inner .infob { --s: 27px; opacity: .92; }
     .ch { position: relative; width: 44px; height: 44px; pointer-events: none; --ch-ease: cubic-bezier(.3,.9,.3,1.06); }
     .ch > button { position: absolute; left: 50%; top: 50%; padding: 0; display: grid; place-items: center;
       transition: transform .22s var(--ch-ease); }
@@ -1106,6 +1118,7 @@
               <button data-key="skip_back" aria-label="Back 10 seconds"><span class="icon ib"></span></button>
               <button class="more" data-act="more" aria-label="More">${icon("more")}</button>
               <button data-key="skip_fwd" aria-label="Forward 10 seconds"><span class="icon if"></span></button>
+              <button class="infob gone" data-key="info" aria-label="Info">${icon("info")}</button><!-- 0.2.1 (Grok Bot, 11 Oct 2026) -->
               <div class="ch"><button class="chb up" data-key="channel_up" aria-label="Channel up" tabindex="-1">${CH_UP}</button><button class="chl" data-act="ch" aria-expanded="false" aria-label="Channels">CH</button><button class="chb dn" data-key="channel_down" aria-label="Channel down" tabindex="-1">${CH_DOWN}</button></div>
             </div>
           </div>
@@ -1496,6 +1509,7 @@
       const chOk = hasChannels(p);
       r.querySelector(".ch").classList.toggle("gone", !chOk);
       if (!chOk && this._chOpen) this._setChOpen(false);
+      r.querySelector(".infob").classList.toggle("gone", !hasInfoButton(p, this._states)); // 0.2.1: Info in the free CH slot
       r.querySelector(".badge").classList.toggle("inert", !soundModeMenu(p, this._states));
       if (this._menu && (this._menuKind === "sources" || this._menuKind === "sound_mode")) {
         // keep the tick on the live value while open
@@ -1507,7 +1521,7 @@
 
   // Exposed for tests and power users.
   GlassRemoteCard.VERSION = VERSION;
-  GlassRemoteCard.helpers = { kbFocus, kbPollInterval, kodiKeyboardFromEvent, sourceMenu, soundModeMenu, optionSteps, moreItems, hasChannels, bannerText, normaliseShortcuts, shortcutSteps, fillText, normaliseConfig, inputSteps, choosePlayer, volumeTarget, nowPlaying, stepsFor, swipeDirection, guessPlatform, PLATFORMS, ICONS };
+  GlassRemoteCard.helpers = { kbFocus, kbPollInterval, kodiKeyboardFromEvent, sourceMenu, soundModeMenu, optionSteps, moreItems, hasChannels, hasInfoButton, bannerText, normaliseShortcuts, shortcutSteps, fillText, normaliseConfig, inputSteps, choosePlayer, volumeTarget, nowPlaying, stepsFor, swipeDirection, guessPlatform, PLATFORMS, ICONS };
 
   if (!customElements.get(TAG)) customElements.define(TAG, GlassRemoteCard);
   window.customCards = window.customCards || [];

@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.1] - 2026-10-11
+
+### Fixed
+- **Info button back on the remote.** Since 0.1.1, Info was only inside the More (⋯) menu, and on players without a CH control (Kodi by default) the right-hand slot of the pad's bottom row sat empty. That slot now holds an **Info** (i) button that sends the player's info key (Kodi `Input.Info`, LG `INFO`, `generic` with a `remote`). Players with CH keep CH there. Info also stays in every player's More menu.
+- New player option `info_button: false` hides it.
+
 ## [0.2.0] - 2026-10-11
 
 ### Added
