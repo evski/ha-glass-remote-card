@@ -4,32 +4,45 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.10] - 2026-10-11
+
+First public release. Glass Remote Card is a frosted-glass touchpad remote for Home Assistant that follows whatever you're watching: Kodi, LG webOS, devices from the Apple TV integration, or any `media_player`. It has a touchpad, volume tabs, keyboard and dictation, a keyboard banner, sources, sound mode, a More menu, a CH control and input switching. It's a single file with no dependencies. Everything below was built and tested privately on the same day.
+
+Not affiliated with or endorsed by Apple Inc. Apple TV is a trademark of Apple Inc.
+
+### Changed
+- Neutral naming throughout. The style is now called "frosted glass", and comparisons to other companies' designs are gone from the code, docs and tests.
+- A generic TV-remote glyph replaces the old app icon in the keyboard banner and typing sheet.
+- The banner text no longer names platforms: "Enter text on <player> using your keyboard. Press to type."
+- The Apple TV platform's picker icon is now `mdi:television-box`.
+- The font stack is now `system-ui`.
+- The device picker is now a dropdown anchored under the top pill. It grows downward, never as a bottom sheet, and the pill's chevron turns from > to v. Rows are plain, with a tick on the left of the selected row, a small generic device icon, the name and hairline dividers. Auto and Exit remote stay as rows, and a thin close button sits at the top right. Tapping outside the list or on the pill closes it. The list spans the top row (the column on tablets).
+- README: a trademark notice, and relative image paths, so the images show while the repository is private.
+
 ## [0.1.9] - 2026-10-11
 
-First public release. Glass Remote Card is an Apple TV Remote-style Liquid Glass remote for Home Assistant that follows whatever you're watching: Apple TV, Kodi, LG webOS or any `media_player`. It has a touchpad, volume tabs, keyboard and dictation, a keyboard banner, sources, sound mode, a More menu, Apple's CH control and input switching. It's a single file with no dependencies. Everything up to 0.1.8 below was built and tested privately on the same day; this release adds the changes listed here.
-
 ### Added
-- Tablet and wide-screen layout, like Apple's iPad Remote. On screens wider than 3:5 the full-screen remote keeps phone proportions in a centred column. The column is `column_ratio` × the screen height wide (default 0.52, at least 320 px), and `max_width` can cap it. The touchpad grows to fill the height, the top row and the volume tabs sit at the column's edges, and play/pause, Back and Home cluster under the pad. Phones are unchanged.
+- Tablet and wide-screen layout. On screens wider than 3:5 the full-screen remote keeps phone proportions in a centred column. The column is `column_ratio` × the screen height wide (default 0.52, at least 320 px), and `max_width` can cap it. The touchpad grows to fill the height, the top row and the volume tabs sit at the column's edges, and play/pause, Back and Home cluster under the pad. Phones are unchanged.
 
 ### Docs
-- README: screen recordings from a real iPhone (Kodi in use, and opening the remote from Control Center, with personal items blurred) next to the demo GIF.
+- README: screen recordings from a real phone (Kodi in use, and opening the remote from Control Center, with personal items blurred) next to the demo GIF.
 
 ## [0.1.8] - 2026-10-11
 
 ### Changed
-- Every overlay now uses the same Liquid Glass panel as the typing sheet and keyboard banner: the device picker, the sources list, the sound mode menu and the More menu.
+- Every overlay now uses the same frosted glass panel as the typing sheet and keyboard banner: the device picker, the sources list, the sound mode menu and the More menu.
 - The device picker's header matches the typing sheet, with the title and a thin close icon in a glass circle. The selected row gets a soft glass highlight and a white tick instead of accent-coloured text.
 
 ### Fixed
-- The keyboard button no longer opens the typing sheet when nothing on the TV is asking for text. Previously every keystroke made Home Assistant show "No text input field is currently focused on the Apple TV", and those toasts piled up. When the player can report keyboard focus (an Apple TV `keyboard_sensor`, or Kodi's keyboard window seen by the poll), the sheet only opens while a text field is focused; otherwise a small glass hint says "No text field selected on <player>" for about 2 seconds. The sheet closes if focus drops while it's open. Players that can't report focus (LG webOS, or Kodi while video plays) behave as before.
+- The keyboard button no longer opens the typing sheet when nothing on the TV is asking for text. Previously every keystroke made Home Assistant show "No text input field is currently focused on the Apple TV", and those toasts piled up. When the player can report keyboard focus (a `keyboard_sensor`, such as the Apple TV integration's, or Kodi's keyboard window seen by the poll), the sheet only opens while a text field is focused; otherwise a small glass hint says "No text field selected on <player>" for about 2 seconds. The sheet closes if focus drops while it's open. Players that can't report focus (LG webOS, or Kodi while video plays) behave as before.
 - Text service calls now turn off Home Assistant's own error toast. A failure shows a single glass hint instead.
 
 ## [0.1.7] - 2026-10-11
 
 ### Changed
-- The typing sheet (keyboard button) now matches the rest of the card: the same frosted Liquid Glass panel and app-icon header as the keyboard banner, a thin close icon in a glass circle, and glass pill Clear and Send buttons instead of coloured text links. The placeholder is shorter ("Type or dictate") and the extra hint line is gone.
+- The typing sheet (keyboard button) now matches the rest of the card: the same frosted glass panel and app-icon header as the keyboard banner, a thin close icon in a glass circle, and glass pill Clear and Send buttons instead of coloured text links. The placeholder is shorter ("Type or dictate") and the extra hint line is gone.
 - README: says plainly that no other custom cards or add-ons are needed, only Home Assistant's built-in integrations.
-- README: a demo GIF at the top, and step-by-step instructions for opening the remote from iPhone Control Center with a Home Assistant **Open Page** shortcut (and why URL shortcuts and the phone's volume buttons don't work).
+- README: a demo GIF at the top, and step-by-step instructions for opening the remote from the phone's Control Center with a Home Assistant **Open Page** shortcut (and why URL shortcuts and the phone's volume buttons don't work).
 - Screenshots and the social preview re-rendered from 0.1.7 (no mic button, new typing sheet).
 
 ## [0.1.6] - 2026-10-11
@@ -40,16 +53,16 @@ First public release. Glass Remote Card is an Apple TV Remote-style Liquid Glass
 ## [0.1.5] - 2026-10-11
 
 ### Fixed
-- The collapsed CH control (CH with its caps) sat a few pixels below the list, -10, ⋯ and +10 icons. The row's buttons are now fixed 44 px boxes with their icons centred, the same as the CH slot, so everything shares one centre line, as on Apple's remote. The row sits about 38 px above the pad's bottom edge, as on Apple's.
+- The collapsed CH control (CH with its caps) sat a few pixels below the list, -10, ⋯ and +10 icons. The row's buttons are now fixed 44 px boxes with their icons centred, the same as the CH slot, so everything shares one centre line. The row sits about 38 px above the pad's bottom edge.
 
 ## [0.1.4] - 2026-10-11
 
 ### Changed
-- The pad's bottom row (sources | -10 | ⋯ | +10 | CH) is always shown again, as on Apple's iOS Remote. 0.1.3's hide/show toggle and its `bottom_row` option are gone.
-- The CH control now works like Apple's. Collapsed, it is a compact "CH" in line with the row, with thin caps above and below. Tapping it expands it into a stack that rises above the row: up chevron, CH, down chevron. The caps slide outward and turn into the chevrons in about 200 ms (CSS transitions, so it works on iOS).
+- The pad's bottom row (sources | -10 | ⋯ | +10 | CH) is always shown again. 0.1.3's hide/show toggle and its `bottom_row` option are gone.
+- New CH control. Collapsed, it is a compact "CH" in line with the row, with thin caps above and below. Tapping it expands it into a stack that rises above the row: up chevron, CH, down chevron. The caps slide outward and turn into the chevrons in about 200 ms (CSS transitions, so it works in mobile Safari).
 - Collapsed, a tap only expands the stack and sends no command. Expanded, the chevrons send channel up/down. Tap CH again to fold it back; it also folds back after 5 s without use.
 - Players without channel keys (e.g. Kodi) hide the CH slot again.
-- Row positions match Apple's screenshots.
+- Row positions tuned on a real phone.
 
 ### Added
 - `channel_timeout`: how long, in ms, before an open CH stack folds back (default `5000`; `0` = never).
@@ -57,8 +70,8 @@ First public release. Glass Remote Card is an Apple TV Remote-style Liquid Glass
 ## [0.1.3] - 2026-10-11 (superseded by 0.1.4)
 
 ### Changed
-- The pad's bottom row (sources | -10 | ⋯ | +10 | CH) now works like Apple's iOS Remote: it is hidden by default, so the touchpad is clear. Tap **CH** in the bottom-right corner of the pad to show it, and tap CH again to hide it. Players without channel keys (e.g. Kodi) get a small chevron in the same spot instead.
-- The CH up/down chevrons appear above and below the CH label when the row is open. They are now sharp chevrons with Apple's spacing, and the row's icons and positions match Apple's proportions.
+- The pad's bottom row (sources | -10 | ⋯ | +10 | CH) is hidden by default, so the touchpad is clear. Tap **CH** in the bottom-right corner of the pad to show it, and tap CH again to hide it. Players without channel keys (e.g. Kodi) get a small chevron in the same spot instead.
+- The CH up/down chevrons appear above and below the CH label when the row is open. They are now sharp chevrons, and the row's icons and positions were re-tuned.
 - The row only catches taps on its own buttons, so taps and swipes anywhere else on the pad still work while it is open.
 
 ### Added
@@ -85,16 +98,16 @@ First public release. Glass Remote Card is an Apple TV Remote-style Liquid Glass
   - `delay`
   - custom `action` (with `$source`)
   - a list of inputs, handled in order
-- The pad's bottom row now matches Apple's remote during playback: sources list | -10 | ... | +10 | CH.
+- The pad's bottom row during playback: sources list | -10 | ... | +10 | CH.
   - **Sources**: a glass picker of the player's or another entity's sources, with the current one ticked. Options: `sources` (`entity`, `include`, `exclude`, `rename`, `action`, `false`), and `select`/`input_select` entities are supported.
   - **More (...)**: info, subtitles, sound mode and per-platform extras (`more` list, custom items, `false`).
-  - **CH** up/down for Apple TV and LG; opt in with `channels`.
+  - **CH** up/down for `apple_tv` and LG; opt in with `channels`.
 - Sound mode menu: press and hold the speaker badge (also in More). Options: `sound_mode` (`entity`, `modes`, `exclude`, `rename`, `action`, `false`).
 - Helpers `inputSteps`, `sourceMenu`, `soundModeMenu`, `optionSteps`, `moreItems` and `hasChannels`, with tests.
-- A test that Apple TV power only uses `media_player.turn_on`/`turn_off`, never a held remote power command.
+- A test that `apple_tv` power only uses `media_player.turn_on`/`turn_off`, never a held remote power command.
 
 ### Changed
-- The "wants text" bar is now an iOS-style keyboard notification. It is a dark glass banner that slides down over the top row, with a Siri Remote app icon and the text "<Device> Keyboard / Keyboard Input / Enter text on ... Press to type."
+- The "wants text" bar is now a notification-style keyboard banner. It is a dark glass banner that slides down over the top row, with a remote app icon and the text "<Device> Keyboard / Keyboard Input / Enter text on ... Press to type."
 - Info and subtitles moved from separate icons into the More menu.
 - Key sequences now run in order and wait for an input switch to finish.
 
@@ -103,16 +116,16 @@ First public release. Glass Remote Card is an Apple TV Remote-style Liquid Glass
 ### Added
 - First version of Glass Remote Card: a single-file, dependency-free Lovelace card.
 - Platforms: `apple_tv`, `kodi`, `webostv`, `generic`, plus per-button `actions` overrides.
-- Layout: full-screen layout with safe areas and Apple's proportions; `card` layout for normal dashboards.
+- Layout: full-screen layout with safe areas and phone proportions; `card` layout for normal dashboards.
 - Picking the player:
   - Built-in device picker.
   - Automatic player choice: a manual pick (kept for `pick_timeout`), then the TV input via `source_map`, then ranking.
   - `?player=` URL parameter, used by Sidebar Mini Player's remote button.
 - Controls:
   - Touchpad: swipe, swipe-and-hold to repeat, tap, long-press.
-  - Side volume tabs with hold-to-repeat; receiver volume with fallback, or volume through the Apple TV remote.
+  - Side volume tabs with hold-to-repeat; receiver volume with fallback, or volume through the player's `remote` entity.
 - Text: keyboard and dictation text box, and the automatic "wants text" bar.
-- Look and feel: Liquid Glass styling, thin line icons, haptics.
+- Look and feel: frosted glass styling, thin line icons, haptics.
 
 [0.1.2]: https://github.com/evski/ha-glass-remote-card/releases/tag/v0.1.2
 [0.1.1]: https://github.com/evski/ha-glass-remote-card/releases/tag/v0.1.1

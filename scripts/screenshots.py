@@ -8,7 +8,7 @@ DEMO = (ROOT / "docs/demo/demo.html").as_uri()
 OUT = ROOT / "docs/images"
 SHOTS = [  # name, query, viewport, safe-area (top, bottom), click
     ("remote-kodi", "", (393, 852), (59, 34), None),
-    ("remote-apple-tv-wants-text", "?src=Apple%20TV&kodi=idle&kbd=on&atv=playing", (393, 852), (59, 34), None),
+    ("remote-wants-text", "?src=Apple%20TV&kodi=idle&kbd=on&atv=playing", (393, 852), (59, 34), None),
     ("picker", "", (393, 852), (59, 34), ".pill"),
     ("keyboard", "?src=Apple%20TV&kodi=idle&atv=playing&kbd=on", (393, 852), (59, 34), ".kbd"),
     ("sources-menu", "", (393, 852), (59, 34), ".src"),

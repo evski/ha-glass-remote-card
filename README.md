@@ -6,26 +6,28 @@
 [![HACS validation](https://github.com/evski/ha-glass-remote-card/actions/workflows/validate.yml/badge.svg)](https://github.com/evski/ha-glass-remote-card/actions/workflows/validate.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-**An Apple TV Remote-style Liquid Glass remote for Home Assistant that follows whatever you're watching.**
-One card drives your Apple TVs, Kodi, LG webOS TVs and any other `media_player`: touchpad, volume, keyboard and dictation, with the now-playing artwork on top. Built for the iPhone companion app, full screen, and it works in any browser.
+**A frosted-glass, touchpad remote for Home Assistant that follows whatever you're watching.**
+One card drives Kodi, LG webOS TVs, devices from Home Assistant's Apple TV integration and any other `media_player`: touchpad, volume, keyboard and dictation, with the now-playing artwork on top. Built for the Home Assistant companion app on a phone, full screen, and it works in any browser.
+
+<sub>Not affiliated with or endorsed by Apple Inc. Apple TV is a trademark of Apple Inc.</sub>
 
 **Nothing else to install.** It's a single JavaScript file. You don't need any other custom cards, HACS add-ons or Home Assistant add-ons: no card-mod, browser_mod, kiosk-mode, template helpers or extra scripts. It only uses Home Assistant's built-in integrations for your devices: [Apple TV](https://www.home-assistant.io/integrations/apple_tv/), [Kodi](https://www.home-assistant.io/integrations/kodi/) and [LG webOS TV](https://www.home-assistant.io/integrations/webostv/). Any other `media_player` works through its standard services.
 
 <table align="center"><tr>
-<td align="center"><img src="https://raw.githubusercontent.com/evski/ha-glass-remote-card/main/docs/images/real-kodi.gif" width="280" alt="Screen recording on a real iPhone: touchpad taps on Kodi, the typing sheet sending 'hello', the keyboard banner, the sources menu and More then Sound Mode"><br><sub><b>On a real iPhone</b> (Kodi)</sub></td>
-<td align="center"><img src="https://raw.githubusercontent.com/evski/ha-glass-remote-card/main/docs/images/demo.gif" width="280" alt="Demo: the artwork pill, picking a player, touchpad swipes and taps, the CH control opening and closing, the keyboard banner and typing, and the volume tabs"><br><sub>Demo with placeholder devices</sub></td>
+<td align="center"><img src="docs/images/real-kodi.gif" width="280" alt="Screen recording on a real phone: touchpad taps on Kodi, the typing sheet sending 'hello', the keyboard banner, the sources menu and More then Sound Mode"><br><sub><b>On a real phone</b> (Kodi)</sub></td>
+<td align="center"><img src="docs/images/demo.gif" width="280" alt="Demo: the artwork pill, picking a player, touchpad swipes and taps, the CH control opening and closing, the keyboard banner and typing, and the volume tabs"><br><sub>Demo with placeholder devices</sub></td>
 </tr></table>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/evski/ha-glass-remote-card/main/docs/images/remote-kodi.png" width="240" alt="Remote controlling Kodi, with artwork in the top pill">
-  <img src="https://raw.githubusercontent.com/evski/ha-glass-remote-card/main/docs/images/picker.png" width="240" alt="Device picker">
-  <img src="https://raw.githubusercontent.com/evski/ha-glass-remote-card/main/docs/images/remote-apple-tv-wants-text.png" width="240" alt="Apple TV asking for text">
+  <img src="docs/images/remote-kodi.png" width="240" alt="Remote controlling Kodi, with artwork in the top pill">
+  <img src="docs/images/picker.png" width="240" alt="Device picker">
+  <img src="docs/images/remote-wants-text.png" width="240" alt="Keyboard banner: the TV is asking for text">
 </p>
 
 ## Features
 
-- **Looks like Apple's Remote app.** Liquid Glass buttons, thin line icons, a big touchpad and Apple's proportions.
-- **Full screen with safe areas.** The card fills the screen and respects the notch and home indicator on any phone. There's no hard-coded height. Use `layout: card` to place it inside a normal dashboard instead. On an iPad or other wide screen it keeps the phone's proportions in a centred column, like Apple's iPad Remote (see `column_ratio` and `max_width`).
+- **Clean, phone-first design.** Frosted glass buttons, thin line icons and a big touchpad.
+- **Full screen with safe areas.** The card fills the screen and respects the notch and home indicator on any phone. There's no hard-coded height. Use `layout: card` to place it inside a normal dashboard instead. On a tablet or other wide screen it keeps the phone's proportions in a centred column (see `column_ratio` and `max_width`).
 - **Follows what you're watching.** Priority order:
   - A device you picked yourself, kept for a few hours.
   - Your TV's input, mapped to a player. An app running on the TV selects the TV itself.
@@ -33,17 +35,17 @@ One card drives your Apple TVs, Kodi, LG webOS TVs and any other `media_player`:
 - **Now-playing pill.** Shows artwork, title and `Device · episode/app/state`. Tap it to open the device picker, which is built in (no browser_mod).
 - **Touchpad.** Swipe for arrows; keep holding after a swipe to keep moving. Tap to select, long-press for the context menu.
 - **Buttons:**
-  - A bottom row inside the pad, like Apple's iOS Remote: **sources list | -10 | ⋯ more | +10 | CH**. Tap **CH** to open Apple's channel stack (up chevron, CH, down chevron). Tap CH again to close it, or it closes by itself after 5 s. CH only shows on devices with channel keys.
+  - A bottom row inside the pad: **sources list | -10 | ⋯ more | +10 | CH**. Tap **CH** to open the channel stack (up chevron, CH, down chevron). Tap CH again to close it, or it closes by itself after 5 s. CH only shows on devices with channel keys.
   - **Sources** opens a glass picker with the player's sources, or those of your receiver or TV. The current source is ticked.
   - **More (⋯)** holds info, subtitles, sound mode and each platform's extras.
   - Play/pause, a big Back button and Home underneath. Long-press Back for the top menu and Home for the platform's extra action.
-- **Volume tabs on the pad's edge, like the Remote app.** Holding a tab repeats. Press and hold the speaker badge between the tabs to pick the receiver's **sound mode**. Volume can go to a receiver, with a fallback when the receiver is off, or through the Apple TV remote (HDMI-CEC/IR).
+- **Volume tabs on the pad's edge.** Holding a tab repeats. Press and hold the speaker badge between the tabs to pick the receiver's **sound mode**. Volume can go to a receiver, with a fallback when the receiver is off, or through the player's `remote` entity (HDMI-CEC/IR).
 - **Keyboard and dictation.**
-  - The keyboard button opens a text box (a separate mic button is available with `show_mic: true`). When the player can report keyboard focus (an Apple TV `keyboard_sensor`, or Kodi's keyboard window seen by the poll), the text box only opens while a text field is selected. Otherwise a small glass hint says "No text field selected", and the box closes by itself when the field goes away. Players that can't report focus, like LG webOS, always open it.
+  - The keyboard button opens a text box (a separate mic button is available with `show_mic: true`). When the player can report keyboard focus (a `keyboard_sensor`, such as the one from the Apple TV integration, or Kodi's keyboard window seen by the poll), the text box only opens while a text field is selected. Otherwise a small glass hint says "No text field selected", and the box closes by itself when the field goes away. Players that can't report focus, like LG webOS, always open it.
   - If a text call fails, the card shows one glass hint instead of a stack of Home Assistant error toasts.
-  - On iPhone, tap the keyboard's mic key to dictate.
-  - Text goes live to an Apple TV, LG or Kodi. Kodi gets `Input.SendText` with `done: false` while you type and `done: true` on Enter, so it lands in an add-on's search box.
-- **Keyboard notification.** When the Apple TV's keyboard-focus sensor turns on, an iOS-style banner slides down: "*Living Room Keyboard* / *Keyboard Input* / Enter text on your Apple TV using your iOS keyboard. Press to type." Tap it to type.
+  - On a phone, tap the keyboard's mic key to dictate.
+  - Text goes live to the Apple TV integration, LG webOS or Kodi. Kodi gets `Input.SendText` with `done: false` while you type and `done: true` on Enter, so it lands in an add-on's search box.
+- **Keyboard notification.** When the player's keyboard-focus sensor turns on, a notification-style banner slides down: "*Living Room Keyboard* / *Keyboard Input* / Enter text on Living Room using your keyboard. Press to type." Tap it to type.
 - **Input switching.** Before a key is sent, the card can put your AV receiver, soundbar or TV on the right input. By default this happens on Home. See [Input switching](#input-switching).
 - **Haptics** in the Home Assistant companion apps.
 - **Pairs with [Sidebar Mini Player](https://github.com/evski/ha-sidebar-mini-player).** Its remote button opens this card already set to that player.
@@ -52,7 +54,7 @@ One card drives your Apple TVs, Kodi, LG webOS TVs and any other `media_player`:
 
 | `platform` | Integration | Arrows, select, back, home | Skip | Info / subtitles | Text | Power |
 |---|---|---|---|---|---|---|
-| `apple_tv` | [Apple TV](https://www.home-assistant.io/integrations/apple_tv/) (`remote.*` + `media_player.*`) | `remote.send_command` | ±10 s (skip_backward/forward) | Opens tvOS's info panel | Live, via `apple_tv.set_keyboard_text` (needs `config_entry_id`) | Wake / sleep |
+| `apple_tv` | [Apple TV](https://www.home-assistant.io/integrations/apple_tv/) (`remote.*` + `media_player.*`) | `remote.send_command` | ±10 s (skip_backward/forward) | Opens the device's info panel | Live, via `apple_tv.set_keyboard_text` (needs `config_entry_id`) | Wake / sleep |
 | `kodi` | [Kodi](https://www.home-assistant.io/integrations/kodi/) | `kodi.call_method` Input.* | ±10 s (Player.Seek) | Input.Info / show subtitles (hold = next track) | `Input.SendText` on Enter | Kodi shutdown menu |
 | `webostv` | [LG webOS TV](https://www.home-assistant.io/integrations/webostv/) | `webostv.button` | Rewind / fast-forward | INFO / CC | Live, via the IME (`webostv.command`) | On / off |
 | `generic` | Any `media_player` (and optional `remote.*`) | Via `remote` if you set one | Previous / next track | Via `remote` | Your own `actions.text` | On / off |
@@ -64,7 +66,7 @@ Every button can be overridden per player with `actions:` (see below).
 ### HACS (recommended)
 
 1. HACS → ⋮ → **Custom repositories** → add `https://github.com/evski/ha-glass-remote-card` as **Dashboard**.
-2. Install **Glass Remote Card**, then reload the browser. In the iOS app, use **Settings → Companion App → Debugging → Reset frontend cache**.
+2. Install **Glass Remote Card**, then reload the browser. In the companion app, use **Settings → Companion App → Debugging → Reset frontend cache**.
 
 ### Manual
 
@@ -113,7 +115,7 @@ players:
     name: Bedroom
     platform: apple_tv
     remote: remote.bedroom_apple_tv
-    volume_via_remote: true               # Apple TV volume_up/down (CEC/IR); hides mute
+    volume_via_remote: true               # volume_up/down through the remote entity (CEC/IR); hides mute
 source_map:                               # optional: follow the TV's input
   entity: media_player.living_room_tv
   sources:
@@ -130,8 +132,8 @@ source_map:                               # optional: follow the TV's input
 |---|---|---|
 | `players` | **required** | List of players (below). A plain entity id string also works. |
 | `layout` | `fullscreen` | `fullscreen`: a fixed, full-viewport remote that respects safe areas. `card`: a normal card. |
-| `pad_height` | `58dvh` | Touchpad height in full screen (Apple's proportion). It shrinks on small screens. |
-| `column_ratio` | `0.52` | Tablets and other wide screens: the full-screen remote becomes a centred column this many times the screen height wide (Apple's iPad Remote is about 0.51), and the touchpad fills the height. Phones aren't affected. |
+| `pad_height` | `58dvh` | Touchpad height in full screen. It shrinks on small screens. |
+| `column_ratio` | `0.52` | Tablets and other wide screens: the full-screen remote becomes a centred column this many times the screen height wide, and the touchpad fills the height. Phones aren't affected. |
 | `max_width` | – | Caps that column's width, for example `560` or `560px`. |
 | `show_mic` | `false` | Show a separate mic button on the pad. It opens the same text box as the keyboard button. |
 | `channel_timeout` | `5000` | How long (ms) the open CH stack (up / CH / down) stays open without use before it folds back. `0` = never. |
@@ -152,11 +154,11 @@ source_map:                               # optional: follow the TV's input
 | `platform` | `apple_tv`, `kodi`, `webostv` or `generic`. It's guessed from the entity id if you leave it out. |
 | `name`, `icon` | Display name and the icon shown when there's no artwork. |
 | `remote` | `remote.*` entity. Required for `apple_tv`; optional for `generic` (arrows, select, back, home, info). |
-| `config_entry_id` | Apple TV only: enables typing. Find it in **Settings → Devices & services → Apple TV**: open the entry, and the id is in the URL. |
-| `keyboard_sensor` | A `binary_sensor` that is `on` while the device wants text (Apple TV: the *Keyboard focus* sensor). It shows the keyboard notification banner. |
+| `config_entry_id` | `apple_tv` only: enables typing. Find it in **Settings → Devices & services → Apple TV**: open the entry, and the id is in the URL. |
+| `keyboard_sensor` | A `binary_sensor` that is `on` while the device wants text (with the Apple TV integration: its *Keyboard focus* sensor). It shows the keyboard notification banner. |
 | `volume_entity` | Where volume and mute go, e.g. an AV receiver. |
 | `volume_fallback` | Used when `volume_entity` is off or unavailable. |
-| `volume_via_remote` | Apple TV: send volume through the remote (`volume_up`/`volume_down`). Mute is hidden. |
+| `volume_via_remote` | `apple_tv`: send volume through the remote (`volume_up`/`volume_down`). Mute is hidden. |
 | `input` | Switch an AVR, soundbar or TV to this player's input before a key is sent. Takes one input or a list. See [Input switching](#input-switching). |
 | `sources` | The sources picker (list button). See [Sources, sound mode, More and CH](#sources-sound-mode-more-and-ch). |
 | `sound_mode` | The sound mode menu (hold the speaker badge, or ⋯ → Sound Mode). |
@@ -180,7 +182,7 @@ source_map:                               # optional: follow the TV's input
 
 ### Sources (list button, bottom left of the pad)
 
-By default the button lists the active player's own `source_list`; on an Apple TV that's its apps. When there's nothing to list, the button is hidden.
+By default the button lists the active player's own `source_list`; for the Apple TV integration that's its apps. When there's nothing to list, the button is hidden.
 
 | Option | Default | Description |
 |---|---|---|
@@ -198,7 +200,7 @@ By default the button lists the active player's own `source_list`; on an Apple T
       entity: media_player.receiver
       include:
         - UHD: Kodi
-        - PVR: Apple TV
+        - PVR: Set-top box
         - GAME: Games
   - entity: media_player.living_room_tv
     platform: webostv
@@ -261,9 +263,9 @@ Set `more: false` to hide the button.
 
 This is shown for `apple_tv` (pyatv `channel_up`/`channel_down`, for live-TV apps) and `webostv` (`CHANNELUP`/`CHANNELDOWN`). Set `channels: true` to add it for Kodi PVR (or for `generic` with a `remote`), and `channels: false` to remove it. Override the keys with `actions.channel_up` / `actions.channel_down`.
 
-### Power on Apple TV
+### Power (`apple_tv`)
 
-Power uses `media_player.turn_on` when the Apple TV is off or in standby, and `media_player.turn_off` otherwise. The card never sends `remote.send_command` `turn_off`/`suspend` with `hold_secs`, because pyatv rejects a held power command. There is no long-press action on Power.
+Power uses `media_player.turn_on` when the device is off or in standby, and `media_player.turn_off` otherwise. The card never sends `remote.send_command` `turn_off`/`suspend` with `hold_secs`, because pyatv rejects a held power command. There is no long-press action on Power.
 
 ## Kodi keyboard detection
 
@@ -284,7 +286,7 @@ When the current window is the virtual keyboard (`10103`) or the numeric input (
 
 ## Input switching
 
-Say Kodi plays through the receiver's `UHD` input, and the receiver is still on the Apple TV's input. Pressing Home on Kodi would then do nothing you can see. With `input:`, the card first switches the receiver to `UHD` and then sends Home. If the receiver is already on `UHD`, only Home is sent.
+Say Kodi plays through the receiver's `UHD` input, and the receiver is still on another player's input. Pressing Home on Kodi would then do nothing you can see. With `input:`, the card first switches the receiver to `UHD` and then sends Home. If the receiver is already on `UHD`, only Home is sent.
 
 ```yaml
   - entity: media_player.kodi
@@ -375,26 +377,26 @@ Notes:
           data: { input: $source }
 ```
 
-## Open it from Control Center (iPhone)
+## Open it from your phone's Control Center
 
-You can put the remote one swipe away in Control Center, like Apple's own Remote. You need iOS 18 or later and the Home Assistant companion app, logged in to your server.
+You can put the remote one swipe away in your iPhone's Control Center. You need iOS 18 or later and the Home Assistant companion app, logged in to your server.
 
 1. Open the **Shortcuts** app and tap **+** to make a new shortcut.
 2. Tap **Add Action**, search for **Home Assistant** and choose **Open Page**.
 3. In the action, tap the page field and pick your remote dashboard (and view, if it has more than one). This is the dashboard with `glass-remote-card` on it, for example `/dashboard-remote/0`.
 4. Rename the shortcut, for example **Remote**: tap the name at the top → **Rename**.
-5. Set its icon: tap the name → **Choose Icon** → **Symbol**, then search for **tv**. Apple doesn't offer its Remote symbol to shortcuts, so the TV symbol is the closest match.
+5. Set its icon: tap the name → **Choose Icon** → **Symbol**, then search for **tv**. Any symbol works; a TV is easy to spot.
 6. Tap **Done**.
 7. Open Control Center, touch and hold an empty space (or tap **+** at the top left) and tap **Add a Control**.
 8. Search for **Shortcuts**, tap **Shortcut**, then choose **Remote**. Drag the control where you want it and tap an empty space to finish.
 
 Tapping the control now opens the Home Assistant app straight on the remote.
 
-<p align="center"><img src="https://raw.githubusercontent.com/evski/ha-glass-remote-card/main/docs/images/control-center.gif" width="300" alt="Real iPhone: opening the remote from Control Center, then the device picker, More, Sound Mode and the CH control"><br><sub>On a real iPhone: Control Center → Remote. Personal tiles are blurred.</sub></p>
+<p align="center"><img src="docs/images/control-center.gif" width="300" alt="Real phone: opening the remote from Control Center, then the device picker, More, Sound Mode and the CH control"><br><sub>On a real phone: Control Center → Remote. Personal tiles are blurred.</sub></p>
 
 **Why not a URL shortcut?** A Shortcut with **Open URL** `homeassistant://navigate/...` looks simpler, but it isn't reliable: if the app is closed or was suspended, iOS often launches it on its default page and the navigate part is lost, or a Safari hop is shown first. **Open Page** is the companion app's own action, so it always lands on the right dashboard.
 
-**The phone's volume buttons can't drive the remote.** iOS keeps the physical volume buttons for the phone's own volume. Apple's Remote is part of the system, so it's allowed to take them over, but a web page or the dashboard inside the Home Assistant app never gets those button presses. Use the volume tabs on the pad's edge instead.
+**The phone's volume buttons can't drive the remote.** The phone keeps its physical volume buttons for its own volume, and a web page or the dashboard inside the Home Assistant app never gets those button presses. Use the volume tabs on the pad's edge instead.
 
 ## With Sidebar Mini Player
 
@@ -420,10 +422,10 @@ kiosk_mode:
 
 ## Limits
 
-- **Siri can't be triggered** from Home Assistant on an Apple TV. Use the keyboard button and your phone keyboard's dictation instead.
-- **The phone's physical volume buttons can't be used.** iOS keeps them for the phone's own volume, and a web page never sees them (see [Control Center](#open-it-from-control-center-iphone)).
+- **The TV's own voice assistant can't be triggered** from Home Assistant. Use the keyboard button and your phone keyboard's dictation instead.
+- **The phone's physical volume buttons can't be used.** The phone keeps them for its own volume, and a web page never sees them (see [Control Center](#open-it-from-your-phones-control-center)).
 - **A web page can't open the phone keyboard without a tap.** That's why the keyboard notification needs one tap.
-- **Apple TV info and subtitles both open tvOS's info panel.** There are no separate keys for them.
+- **`apple_tv`: info and subtitles both open the device's info panel.** There are no separate keys for them.
 - **LG rewind/fast-forward** change playback speed; they don't jump 10 seconds.
 - **The manual pick is stored per device** (local storage), not shared between phones.
 

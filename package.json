@@ -1,14 +1,14 @@
 {
   "name": "ha-glass-remote-card",
-  "version": "0.1.9",
-  "description": "Apple-TV-Remote-style Liquid Glass remote card for Home Assistant. Follows whatever you're watching: Apple TV, Kodi, LG webOS or any media_player. Touchpad, volume, keyboard and dictation. Single file, no dependencies. HACS plugin.",
+  "version": "0.1.10",
+  "description": "Frosted-glass touchpad remote card for Home Assistant. Follows whatever you're watching: Kodi, LG webOS, the Apple TV integration or any media_player. Touchpad, volume, keyboard and dictation. Single file, no dependencies. HACS plugin.",
   "private": true,
   "main": "glass-remote-card.js",
   "scripts": {
     "test": "node --check glass-remote-card.js && node test/test.js",
     "check": "node --check glass-remote-card.js"
   },
-  "keywords": ["home-assistant", "hacs", "lovelace", "remote", "apple-tv", "kodi", "webos", "liquid-glass", "custom-card"],
+  "keywords": ["home-assistant", "hacs", "lovelace", "remote", "kodi", "webos", "media-player", "touchpad", "custom-card"],
   "author": "Evan <evski@users.noreply.github.com>",
   "license": "MIT",
   "repository": { "type": "git", "url": "https://github.com/evski/ha-glass-remote-card.git" },

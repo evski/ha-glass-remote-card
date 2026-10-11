@@ -22,7 +22,7 @@ card.setConfig({
     { entity: "media_player.living_room_apple_tv", platform: "apple_tv", remote: "remote.living_room_apple_tv", config_entry_id: "x",
       volume_entity: "media_player.receiver", keyboard_sensor: "binary_sensor.living_room_apple_tv_keyboard_focus" },
     { entity: "media_player.kodi", platform: "kodi", volume_entity: "media_player.receiver",
-      sources: { entity: "media_player.receiver", include: [{ UHD: "Kodi" }, { PVR: "Apple TV" }, { GAME: "Games" }, { BT: "Bluetooth" }] },
+      sources: { entity: "media_player.receiver", include: [{ UHD: "Kodi" }, { PVR: "Set-top box" }, { GAME: "Games" }, { BT: "Bluetooth" }] },
       sound_mode: { modes: [{ STEREO: "Stereo" }, { DOLBY_SURROUND: "Dolby Surround" }, { DTS_NEURAL_X: "DTS Neural:X" }, { MCH_STEREO: "Multichannel Stereo" }] } },
     { entity: "media_player.living_room_tv", platform: "webostv", volume_entity: "media_player.receiver" },
     { entity: "media_player.bedroom_apple_tv", platform: "apple_tv", remote: "remote.bedroom_apple_tv", volume_via_remote: true },

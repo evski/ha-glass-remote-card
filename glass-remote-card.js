@@ -1,35 +1,42 @@
 /*!
  * Glass Remote Card for Home Assistant
- * An Apple-TV-Remote-style, Liquid-Glass remote that follows whatever you're watching.
- * Apple TV, Kodi, LG webOS and any media_player. Single file, no dependencies.
+ * A frosted-glass touchpad remote that follows whatever you're watching.
+ * Kodi, LG webOS, the Apple TV integration and any media_player. Single file, no dependencies.
+ * Not affiliated with or endorsed by Apple Inc. Apple TV is a trademark of Apple Inc.
  *
  * https://github.com/evski/ha-glass-remote-card
  * MIT licence.
  *
  * 0.1.4 (Grok Bot, 11 Oct 2026): the pad's bottom row (sources | -10 | more | +10 | CH) is always shown,
- * as on Apple's iOS Remote. Only the CH control changes: a compact "CH" with thin caps above and below
+ * Only the CH control changes: a compact "CH" with thin caps above and below
  * sits in the row; tapping it animates the caps out into an up/down chevron stack (channel up/down).
  * Tap CH again, or leave it ~5 s (`channel_timeout`), and it folds back. Replaces 0.1.3's hidden row.
  * 0.1.6 (Grok Bot, 11 Oct 2026): the mic button is gone by default (it did the same as the keyboard
  * button); `show_mic: true` brings it back.
- * 0.1.7 (Grok Bot, 11 Oct 2026): the typing sheet (keyboard button) now matches the Liquid Glass look and
+ * 0.1.7 (Grok Bot, 11 Oct 2026): the typing sheet (keyboard button) now matches the frosted glass look and
  * the keyboard banner: same frosted glass panel and app-icon header, thin close icon in a glass circle,
  * glass pill Clear/Send buttons (no accent-coloured text links), shorter placeholder, no hint line.
  * 0.1.8 (Grok Bot, 11 Oct 2026): every sheet and menu (device picker, sources, sound mode, More) uses that
  * same glass panel (PANEL): picker header like the typing sheet, thin close in a glass circle, white ticks
  * and a soft glass highlight for the selected row instead of accent-coloured text.
  * 0.1.8 keyboard focus: when the player can tell us a text field is focused (a keyboard_sensor such as the
- * Apple TV's, or Kodi's keyboard window seen by the poll), the keyboard button only opens the typing sheet
+ * apple_tv integration's, or Kodi's keyboard window seen by the poll), the keyboard button only opens the typing sheet
  * while a field is focused; otherwise it shows a short glass hint. The sheet closes when focus drops.
  * Text service calls are made with HA's error toast turned off; a failure shows one glass hint instead.
- * 0.1.9 (Grok Bot, 11 Oct 2026): tablet / wide layout like Apple's iPad Remote. On wide screens the full-screen
+ * 0.1.9 (Grok Bot, 11 Oct 2026): tablet / wide layout. On wide screens the full-screen
  * remote is a centred column with phone proportions (width = column_ratio x height, capped by max_width),
  * the touchpad grows to fill the height and the bottom three buttons cluster in the middle. Phones unchanged.
+ * 0.1.10 (Grok Bot, 11 Oct 2026): neutral naming and wording ("frosted glass"), a generic remote glyph,
+ * banner text without platform trademarks, system-ui font stack, trademark notice.
+ * 0.1.10 device picker: a dropdown anchored under the top pill that grows downward (never a bottom sheet).
+ * The pill's chevron turns from > to v; rows are plain (tick, small device icon, name) with hairline dividers;
+ * Auto and Exit remote stay as rows; a thin close button sits at the list's top right; tapping outside or on
+ * the pill closes it. The list spans the top row (the column on tablets).
  */
 (() => {
   "use strict";
 
-  const VERSION = "0.1.9";
+  const VERSION = "0.1.10";
   const TAG = "glass-remote-card";
   const PICK_KEY = "glass-remote-card:pick:";
 
@@ -61,7 +68,7 @@
     keyboard: svg('<rect x="2.3" y="6" width="19.4" height="12" rx="2"/><path d="M6 9.5h0M9 9.5h0M12 9.5h0M15 9.5h0M18 9.5h0M6 12.4h0M9 12.4h0M12 12.4h0M15 12.4h0M18 12.4h0M8 15.3h8" stroke-width="1.5"/>', 1.4),
     list: svg('<path d="M8.6 6.5h12M8.6 12h12M8.6 17.5h12" stroke-width="1.5"/><circle cx="4" cy="6.5" r=".55" fill="currentColor"/><circle cx="4" cy="12" r=".55" fill="currentColor"/><circle cx="4" cy="17.5" r=".55" fill="currentColor"/>'),
     more: svg('<circle cx="12" cy="12" r="9.2"/><circle cx="7.9" cy="12" r=".45" fill="currentColor"/><circle cx="12" cy="12" r=".45" fill="currentColor"/><circle cx="16.1" cy="12" r=".45" fill="currentColor"/>', 1.5),
-    // sharp chevrons, as in Apple's CH stack (Grok Bot, 11 Oct 2026)
+    // sharp chevrons for the CH stack (Grok Bot, 11 Oct 2026)
     chev_up: '<svg viewBox="4 4.5 16 9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 12.5 12 6l6.5 6.5"/></svg>',
     chev_down: '<svg viewBox="4 4.5 16 9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 6 12 12.5 18.5 6"/></svg>',
     sound_mode: svg('<path d="M4 9.5v5M8 6.5v11M12 4v16M16 7.5v9M20 10v4"/>', 1.6),
@@ -77,23 +84,23 @@
     close: svg('<path d="M6 6l12 12M18 6 6 18"/>', 1.8),
   };
 
-  // CH control (0.1.4, Grok Bot 11 Oct 2026): each glyph holds Apple's collapsed thin cap and the open
-  // chevron; CSS cross-fades and moves them, so it works on iOS Safari (no CSS path morphing there).
+  // CH control (0.1.4, Grok Bot 11 Oct 2026): each glyph holds the collapsed thin cap and the open
+  // chevron; CSS cross-fades and moves them, so it works on mobile Safari (no CSS path morphing there).
   const CH_UP = '<svg viewBox="4 4.5 16 9" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="cap" stroke-width="1.6" d="M6.2 10.6 10.8 8.4Q12 7.8 13.2 8.4L17.8 10.6"/><path class="chev" stroke-width="2" d="M6.5 12 12 6.5l5.5 5.5"/></svg>';
   const CH_DOWN = '<svg viewBox="4 4.5 16 9" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="cap" stroke-width="1.6" d="M6.2 7.4 10.8 9.6Q12 10.2 13.2 9.6L17.8 7.4"/><path class="chev" stroke-width="2" d="M6.5 6.5 12 12l5.5-5.5"/></svg>';
 
-  // Siri Remote glyph for the keyboard banner's app icon (filled, like the iOS notification).
-  const REMOTE_GLYPH = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8.2" y="1.8" width="7.6" height="20.4" rx="2.6" fill="#fff"/>' +
-    '<circle cx="12" cy="6.4" r="2.5" fill="#2c2c2e"/><circle cx="12" cy="6.4" r="0.9" fill="#fff"/>' +
-    '<circle cx="10.4" cy="11.4" r="0.85" fill="#2c2c2e"/><circle cx="13.6" cy="11.4" r="0.85" fill="#2c2c2e"/>' +
-    '<circle cx="10.4" cy="14.2" r="0.85" fill="#2c2c2e"/><circle cx="13.6" cy="14.2" r="0.85" fill="#2c2c2e"/>' +
-    '<rect x="11.3" y="16.3" width="1.4" height="3.2" rx=".7" fill="#2c2c2e"/></svg>';
+  // Generic TV-remote glyph for the keyboard banner's and typing sheet's app icon (0.1.10, Grok Bot 11 Oct 2026):
+  // body, power dot, ring d-pad and a 3x3 key grid.
+  const REMOTE_GLYPH = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="1.6" width="10" height="20.8" rx="3" fill="#fff"/>' +
+    '<circle cx="14.6" cy="4.2" r="0.8" fill="#2c2c2e"/>' +
+    '<circle cx="12" cy="8.9" r="2.7" fill="none" stroke="#2c2c2e" stroke-width="1.1"/><circle cx="12" cy="8.9" r="1" fill="#2c2c2e"/>' +
+    [13.8, 16.4, 19].map((y) => [9.3, 11.3, 13.3].map((x) => `<rect x="${x}" y="${y}" width="1.4" height="1.4" rx=".35" fill="#2c2c2e"/>`).join("")).join("") +
+    '</svg>';
 
-  /** Banner text for the "wants text" notification, worded like iOS's Apple TV keyboard alert. */
-  function bannerText(p, name, ios) {
-    const kb = ios ? "iOS keyboard" : "keyboard";
-    const where = { apple_tv: "your Apple TV", kodi: "Kodi", webostv: "your LG TV" }[p.platform] || name;
-    return { title: `${name} Keyboard`, line2: "Keyboard Input", body: `Enter text on ${where} using your ${kb}. Press to type.` };
+  /** Banner text for the "wants text" notification. 0.1.10: neutral wording, the player's own name. */
+  function bannerText(p, name) {
+    const where = { kodi: "Kodi", webostv: "your LG TV" }[p.platform] || name;
+    return { title: `${name} Keyboard`, line2: "Keyboard Input", body: `Enter text on ${where} using your keyboard. Press to type.` };
   }
 
   /** Keyboard focus, 0.1.8 (Grok Bot, 11 Oct 2026): true/false when the player can report whether a text
@@ -123,7 +130,7 @@
   const PLATFORMS = {
     apple_tv: {
       label: "Apple TV",
-      icon: "mdi:apple",
+      icon: "mdi:television-box",
       icons: {},
       keys: {
         up: (p) => rc(p, "up"), down: (p) => rc(p, "down"), left: (p) => rc(p, "left"), right: (p) => rc(p, "right"),
@@ -132,7 +139,7 @@
         home: (p) => rc(p, "home"), home_hold: (p) => rc(p, "home", { hold_secs: 1 }),
         play_pause: (p) => rc(p, "play_pause"),
         skip_back: (p) => rc(p, "skip_backward"), skip_fwd: (p) => rc(p, "skip_forward"),
-        // tvOS has no separate info/subtitle key: swipe-down opens the info panel (Info / Subtitles / Audio).
+        // the device has no separate info/subtitle key: swipe-down opens the info panel (Info / Subtitles / Audio).
         info: (p) => rc(p, "down"), subtitles: (p) => rc(p, "down"),
         // Power: media_player.turn_on/turn_off (pyatv's power API). Never remote.send_command
         // turn_off/suspend: with hold_secs that raises "turn_off() got an unexpected keyword argument 'action'".
@@ -257,7 +264,7 @@
       layout: "fullscreen", haptics: true, pick_timeout: 180, exit_path: "/", show_exit: true,
       pad_height: "58dvh", card_height: "640px", column_ratio: 0.52, max_width: "100vw", ...config, players,
     };
-    // 0.1.9 (Grok Bot, 11 Oct 2026): wide-screen column. column_ratio = column width / screen height (Apple's iPad Remote ~0.51);
+    // 0.1.9 (Grok Bot, 11 Oct 2026): wide-screen column. column_ratio = column width / screen height (~0.51 suits a tablet);
     // max_width caps it (any CSS length, or a number of px).
     if (typeof out.column_ratio !== "number" || !(out.column_ratio > 0) || out.column_ratio > 2) throw new Error("glass-remote-card: column_ratio must be a number between 0 and 2 (e.g. 0.52)");
     if (typeof out.max_width === "number") out.max_width = out.max_width + "px";
@@ -569,10 +576,10 @@
     -webkit-backdrop-filter: blur(30px) saturate(180%); backdrop-filter: blur(30px) saturate(180%);`;
 
   const CSS = `
-    :host { display: block; color: rgba(255,255,255,.95); font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", var(--paper-font-body1_-_font-family, Roboto), sans-serif; --grc-fg: rgba(255,255,255,.95); --grc-dim: rgba(255,255,255,.55);
+    :host { display: block; color: rgba(255,255,255,.95); font-family: system-ui, var(--paper-font-body1_-_font-family, Roboto), sans-serif; --grc-fg: rgba(255,255,255,.95); --grc-dim: rgba(255,255,255,.55);
       --grc-pad: #1c1c1e; --grc-bg: #000; --grc-accent: var(--primary-color, #0a84ff); }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    .root { color: var(--grc-fg); background: var(--grc-bg); font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", var(--paper-font-body1_-_font-family, Roboto), sans-serif;
+    .root { color: var(--grc-fg); background: var(--grc-bg); font-family: system-ui, var(--paper-font-body1_-_font-family, Roboto), sans-serif;
       display: flex; flex-direction: column; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
     .root.fullscreen { position: fixed; inset: 0; z-index: 7;
       padding: calc(max(env(safe-area-inset-top, 0px), 8px) + 6px) calc(16px + env(safe-area-inset-right, 0px))
@@ -611,9 +618,9 @@
     .badge { width: 30px; height: 30px; margin-left: 17px; border-radius: 50%; display: grid; place-items: center; --s: 15px; -webkit-touch-callout: none; user-select: none; }
     .badge.inert { pointer-events: none; }
     .mic { position: absolute; right: 10px; top: calc(10% + 54px); width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; --s: 19px; z-index: 2; }
-    /* bottom row inside the pad, always shown, like Apple's iOS Remote: sources | -10 | (...) | +10 | CH.
+    /* bottom row inside the pad, always shown: sources | -10 | (...) | +10 | CH.
        The row only catches taps on its own buttons, so the rest of the pad stays a touchpad.
-       0.1.4/0.1.5 (Grok Bot, 11 Oct 2026): proportions from Apple's screenshots (five equal columns, icons ~27px
+       0.1.4/0.1.5 (Grok Bot, 11 Oct 2026): proportions tuned on a phone (five equal columns, icons ~27px
        centred ~35px above the pad's bottom edge). CH: collapsed = "CH" in the row with thin caps hugging it;
        open = the caps slide out and turn into chevrons, CH rises: up chevron, CH, down chevron (~33px pitch). */
     .inner { position: absolute; left: 6px; right: 6px; bottom: 16px; display: grid; grid-template-columns: repeat(5, 1fr);
@@ -661,7 +668,7 @@
     .bottom .side { width: 82px; height: 82px; border-radius: 50%; display: grid; place-items: center; --s: 34px; }
     .bottom .big { width: 106px; height: 106px; border-radius: 50%; display: grid; place-items: center; --s: 44px; }
 
-    /* 0.1.9 tablet / wide layout (Grok Bot, 11 Oct 2026), like Apple's iPad Remote: when the screen is wider than
+    /* 0.1.9 tablet / wide layout (Grok Bot, 11 Oct 2026): when the screen is wider than
        3:5, keep phone proportions in a centred column (width = column_ratio x height, at least 320px, capped by
        max_width), let the pad fill the height, and cluster the bottom three buttons under it. Phones (narrower
        than 3:5) never match, so they are unchanged. The volume tabs hang off the pad, so they follow the column. */
@@ -682,7 +689,7 @@
     .toast.show { opacity: 1; transform: translate(-50%, -50%); }
     .root.card ~ .toast { position: absolute; }
 
-    /* "wants text": an iOS-style notification banner that slides down over the top row */
+    /* "wants text": a notification-style banner that slides down over the top row */
     .wants { position: absolute; z-index: 6; left: calc(10px + env(safe-area-inset-left, 0px)); right: calc(10px + env(safe-area-inset-right, 0px));
       top: calc(max(env(safe-area-inset-top, 0px), 8px) + 2px); display: flex; align-items: center; gap: 12px; text-align: left;
       padding: 12px 16px 12px 12px; border-radius: 24px; ${PANEL}
@@ -705,12 +712,32 @@
     .sheet { width: min(520px, 100%); margin: 0 8px calc(max(env(safe-area-inset-bottom, 0px), 8px) + 8px); border-radius: 28px; padding: 12px; ${PANEL} }
     /* picker header, 0.1.8: same layout as the typing sheet's header (title + thin close in a glass circle) */
     .sheet h3 { margin: 0; padding: 2px 0 10px 6px; font-size: 15px; font-weight: 600; color: #fff; display: flex; justify-content: space-between; align-items: center; }
-    .opt { width: 100%; display: flex; align-items: center; gap: 12px; padding: 9px 10px; border-radius: 18px; text-align: left; transition: background .15s; }
-    .opt:active { background: rgba(255,255,255,.10); }
-    .opt.sel { background: rgba(255,255,255,.08); box-shadow: inset 0 1px 0 rgba(255,255,255,.08); }
-    .opt .art { width: 38px; height: 38px; --s: 20px; background: rgba(255,255,255,.10); box-shadow: inset 0 0 0 .5px rgba(255,255,255,.14); }
-    .opt .l2 { color: rgba(235,235,245,.6); }
-    .opt .tick { margin-left: auto; padding-right: 4px; color: #fff; font-size: 17px; font-weight: 600; }
+    /* device picker, 0.1.10 (Grok Bot, 11 Oct 2026): dropdown anchored under the pill, grows downward.
+       Transparent full-screen catcher (tap anywhere outside the list, pill included, closes it); the shade starts
+       below the top row so the pill stays visible; rows are plain with hairline dividers and a left tick. */
+    .dd-bg { position: fixed; inset: 0; z-index: 20; visibility: hidden; pointer-events: none; transition: visibility 0s linear .28s; }
+    .dd-bg.show { visibility: visible; pointer-events: auto; transition: none; }
+    .dd-shade { position: fixed; left: 0; right: 0; bottom: 0; top: var(--dd-top, 80px); background: rgba(0,0,0,.86);
+      -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); opacity: 0; transition: opacity .22s ease; pointer-events: none; }
+    .dd-bg.show .dd-shade { opacity: 1; }
+    .dd { position: fixed; top: var(--dd-top, 80px); left: var(--dd-left, 16px); width: var(--dd-width, calc(100vw - 32px));
+      max-height: calc(100dvh - var(--dd-top, 80px) - 16px); overflow-y: auto; overscroll-behavior: contain; padding: 2px 0 6px;
+      transform-origin: 50% 0; transform: translateY(-14px) scaleY(.7); opacity: 0;
+      transition: transform .28s cubic-bezier(.2,.9,.3,1.08), opacity .18s ease; }
+    .dd-bg.show .dd { transform: none; opacity: 1; }
+    .dd-x { position: absolute; top: 6px; right: 2px; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; --s: 14px; z-index: 1; }
+    .dd-x .icon { opacity: .8; }
+    .opt { width: 100%; display: flex; align-items: center; gap: 12px; padding: 0 44px 0 6px; min-height: 48px; text-align: left; font-size: 15px;
+      border-top: .5px solid rgba(255,255,255,.14); transition: background .15s; }
+    .opt:first-child { border-top: none; }
+    .opt:active { background: rgba(255,255,255,.07); }
+    .opt .tick { flex: 0 0 16px; width: 16px; text-align: center; color: #fff; font-size: 14px; font-weight: 600; }
+    .opt .art { flex: 0 0 auto; width: 22px; height: 22px; border-radius: 0; background: none; --s: 20px; --mdc-icon-size: 20px; color: rgba(255,255,255,.92); }
+    .opt .lines { flex: 1 1 auto; min-width: 0; }
+    .opt .l1 { font-size: 15px; font-weight: 500; }
+    .opt .l2 { display: none; }
+    .pill .chev { transition: transform .25s cubic-bezier(.2,.9,.3,1.1); }
+    .pill.open .chev { transform: rotate(90deg); }
     /* typing sheet, 0.1.7 (Grok Bot, 11 Oct 2026): same frosted glass as the keyboard banner and menus,
        banner-style header, thin close icon, glass pill buttons, no accent-coloured text links */
     .kb-head { display: flex; align-items: center; gap: 12px; padding: 0 0 12px; }
@@ -920,7 +947,7 @@
           </button>
           <div class="top">
             <button class="circle glass" data-key="mute" aria-label="Mute">${icon("mute")}</button>
-            <button class="pill glass" data-act="picker" aria-label="Choose device">
+            <button class="pill glass" data-act="picker" aria-label="Choose device" aria-haspopup="listbox" aria-expanded="false">
               <span class="art"></span>
               <span class="lines"><span class="l1"></span><span class="l2"></span></span>
               <span class="icon chev">${ICONS.chevron}</span>
@@ -952,7 +979,7 @@
         </div>
         <div class="menu-bg"><div class="menu" role="menu"></div></div>
         <div class="toast" role="status" aria-live="polite"></div>
-        <div class="sheet-bg picker"><div class="sheet"><h3><span>Control</span><button class="kb-x glass" data-act="close" aria-label="Close">${icon("close")}</button></h3><div class="opts"></div></div></div>
+        <div class="dd-bg picker"><div class="dd-shade"></div><div class="dd" role="listbox" aria-label="Choose device"><button class="dd-x glass" data-act="close" aria-label="Close">${icon("close")}</button><div class="opts"></div></div></div>
         <div class="sheet-bg kb"><div class="sheet">
           <div class="kb-head"><span class="appicon">${REMOTE_GLYPH}</span>
             <span class="kb-txt"><span class="kb-title">Type</span><span class="kb-sub">Keyboard Input</span></span>
@@ -968,7 +995,7 @@
       // Buttons with a key: tap; data-repeat = hold to repeat; long press = <key>_hold if the platform has it.
       r.querySelectorAll("[data-key]").forEach((b) => this._wireButton(b, b.dataset.key, b.hasAttribute("data-repeat")));
       r.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); this._act(b.dataset.act); }));
-      r.querySelectorAll(".sheet-bg").forEach((bg) => bg.addEventListener("click", (e) => { if (e.target === bg) this._closeSheets(); }));
+      r.querySelectorAll(".sheet-bg, .dd-bg").forEach((bg) => bg.addEventListener("click", (e) => { if (e.target === bg) this._closeSheets(); }));
       const ta = r.querySelector(".kb textarea");
       ta.addEventListener("input", () => {
         this._kbText = ta.value;
@@ -1106,7 +1133,7 @@
         clearTimeout(longT);
         if (!fired) {
           fired = true; this.press(dir); show(e.clientX, e.clientY);
-          // keep holding after a swipe = keep moving (like the Siri Remote)
+          // keep holding after a swipe = keep moving
           repT = setTimeout(() => { repT = setInterval(() => this.press(dir), 180); this._timers.add(repT); }, 500);
           this._timers.add(repT);
         }
@@ -1124,20 +1151,26 @@
 
     _act(act) {
       const r = this.shadowRoot;
-      if (act === "picker") { this._haptic(); this._renderPicker(); r.querySelector(".picker").classList.add("show"); }
+      if (act === "picker") {
+        this._haptic();
+        if (r.querySelector(".picker").classList.contains("show")) { this._closeSheets(); return; } // tapping the pill again closes it
+        this._renderPicker(); this._placePicker();
+        r.querySelector(".picker").classList.add("show"); r.querySelector(".pill").classList.add("open");
+        r.querySelector(".pill").setAttribute("aria-expanded", "true");
+      }
       else if (act === "close") this._closeSheets();
       else if (act === "ch") { this._haptic(); this._setChOpen(!this._chOpen); }
       else if (act === "sources" || act === "more") { this._haptic(); this._openMenu(act, r.querySelector(act === "sources" ? ".src" : ".more")); }
       else if (act === "keyboard") {
         this._haptic();
         const p = this.activePlayer;
-        // 0.1.8: only while a text field is focused, when the player can tell us (Apple TV sensor, Kodi poll)
+        // 0.1.8: only while a text field is focused, when the player can tell us (keyboard_sensor, Kodi poll)
         if (this._focus(p) === false) { this._toast(`No text field selected on ${this._friendly(p)}`); return; }
         this._kbSheetFor = p ? p.entity : null;
         r.querySelector(".kb-title").textContent = p ? (p.name || this._friendly(p)) : "Type"; // 0.1.7: banner-style header (name / "Keyboard Input")
         const ta = r.querySelector(".kb textarea"); ta.value = ""; this._kbText = "";
         r.querySelector(".kb").classList.add("show");
-        ta.focus(); // iOS only raises the keyboard if this runs inside the tap, which it does
+        ta.focus(); // mobile Safari only raises the keyboard if this runs inside the tap, which it does
       }
       else if (act === "kb-clear") { const ta = r.querySelector(".kb textarea"); ta.value = ""; this._kbText = ""; this.sendText("", false); ta.focus(); }
       else if (act === "kb-send") {
@@ -1181,7 +1214,21 @@
       clearTimeout(this._db_ch); this._timers.delete(this._db_ch); this._db_ch = null;
       if (this._chOpen && this._config.channel_timeout > 0) this._debounce("ch", () => this._setChOpen(false), this._config.channel_timeout);
     }
-    _closeSheets() { this.shadowRoot.querySelectorAll(".sheet-bg").forEach((s) => s.classList.remove("show")); this._kbSheetFor = null; }
+    _closeSheets() {
+      const r = this.shadowRoot;
+      r.querySelectorAll(".sheet-bg, .dd-bg").forEach((s) => s.classList.remove("show")); this._kbSheetFor = null;
+      const pill = r.querySelector(".pill"); if (pill) { pill.classList.remove("open"); pill.setAttribute("aria-expanded", "false"); }
+    }
+    /** 0.1.10: put the dropdown straight under the top row, spanning it (the column on tablets). */
+    _placePicker() {
+      const r = this.shadowRoot, top = r.querySelector(".top"), bg = r.querySelector(".picker");
+      if (!top || !bg || !top.getBoundingClientRect) return;
+      const b = top.getBoundingClientRect();
+      if (!b.width) return; // not laid out (tests): CSS defaults apply
+      bg.style.setProperty("--dd-top", Math.round(b.bottom + 8) + "px");
+      bg.style.setProperty("--dd-left", Math.round(b.left) + "px");
+      bg.style.setProperty("--dd-width", Math.round(b.width) + "px");
+    }
     _friendly(p) { const st = this._states[p.entity]; return p.name || (st && st.attributes && st.attributes.friendly_name) || p.entity; }
 
     _artHtml(p, art) {
@@ -1194,15 +1241,16 @@
       const pick = this._readPick();
       const manual = pick && pick.entity && Date.now() - pick.ts < this._config.pick_timeout * 60000;
       const active = this.activeEntity;
-      const opt = (id, artHtml, l1, l2, sel) => `<button class="opt${sel ? " sel" : ""}" data-act="pick:${esc(id)}">
-          <span class="art">${artHtml}</span><span class="lines"><span class="l1">${esc(l1)}</span><span class="l2">${esc(l2)}</span></span>${sel ? '<span class="tick">\u2713</span>' : ""}</button>`;
+      // 0.1.10: tick on the left, small generic device icon, name (state kept for screen readers only)
+      const opt = (id, artHtml, l1, l2, sel) => `<button class="opt${sel ? " sel" : ""}" role="option" aria-selected="${sel ? "true" : "false"}" data-act="pick:${esc(id)}">
+          <span class="tick">${sel ? "\u2713" : ""}</span><span class="art">${artHtml}</span><span class="lines"><span class="l1">${esc(l1)}</span><span class="l2">${esc(l2)}</span></span></button>`;
       let html = opt("auto", icon("auto"), "Auto", "Follows what you're watching", !manual);
       for (const p of this._config.players) {
         const st = this._states[p.entity];
-        html += opt(p.entity, this._artHtml(p, null), this._friendly(p), st ? st.state.replace(/_/g, " ") : "unavailable", manual && p.entity === active);
+        html += opt(p.entity, icon("tv"), this._friendly(p), st ? st.state.replace(/_/g, " ") : "unavailable", manual && p.entity === active);
       }
       if (this._config.layout === "fullscreen" && this._config.show_exit)
-        html += `<button class="opt" data-act="exit"><span class="art">${icon("exit")}</span><span class="lines"><span class="l1">Exit remote</span><span class="l2">Back to your dashboard</span></span></button>`;
+        html += `<button class="opt" data-act="exit"><span class="tick"></span><span class="art">${icon("exit")}</span><span class="lines"><span class="l1">Exit remote</span><span class="l2">Back to your dashboard</span></span></button>`;
       const box = this.shadowRoot.querySelector(".opts");
       box.innerHTML = html;
       box.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); this._act(b.dataset.act); }));
@@ -1237,10 +1285,10 @@
       mute.classList.toggle("hidden", vt === "remote" && !(p.actions && p.actions.mute));
       const muted = vt !== "remote" && this._states[vt] && this._states[vt].attributes && this._states[vt].attributes.is_volume_muted;
       mute.innerHTML = icon(muted ? "mute" : "unmuted");
-      // "wants text" bar (Apple TV keyboard focus sensor, or any binary_sensor you point at)
+      // "wants text" bar (keyboard focus sensor, or any binary_sensor you point at)
       const ks = p.keyboard_sensor && this._states[p.keyboard_sensor];
       const wants = !!(ks && ks.state === "on") || !!(this._kbOpen && this._kbEntity === p.entity);
-      const bt = bannerText(p, this._friendly(p), /iPhone|iPad|iPod/.test(navigator.userAgent || "") || /Home Assistant\/.*iOS/.test(navigator.userAgent || ""));
+      const bt = bannerText(p, this._friendly(p));
       r.querySelector(".wants .t1").textContent = bt.title;
       r.querySelector(".wants .t2").textContent = bt.line2;
       r.querySelector(".wants .t3").textContent = bt.body;
@@ -1274,7 +1322,7 @@
   if (!window.customCards.some((c) => c.type === TAG)) {
     window.customCards.push({
       type: TAG, name: "Glass Remote Card", preview: false,
-      description: "Apple-TV-Remote-style Liquid-Glass remote that follows whatever you're watching (Apple TV, Kodi, LG webOS, any media_player).",
+      description: "Frosted-glass touchpad remote that follows whatever you're watching (Kodi, LG webOS, Apple TV integration, any media_player).",
       documentationURL: "https://github.com/evski/ha-glass-remote-card",
     });
   }

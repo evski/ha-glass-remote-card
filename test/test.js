@@ -191,7 +191,7 @@ function ptr(w, el, type, x = 100, y = 100) {
     m.$(".kb-sub").textContent === "Keyboard Input" && m.$(".kb .kb-x").classList.contains("glass") && !m.$(".kb .hint") &&
     [...m.card.shadowRoot.querySelectorAll(".kb .row button")].every((b) => b.classList.contains("glass")) &&
     m.$(".kb textarea").placeholder === "Type or dictate", m.$(".kb-title").textContent);
-  check("D17c 0.1.8 picker header has the same glass close as the typing sheet", !!m.$(".picker h3 .kb-x.glass"));
+  check("D17c picker keeps a thin glass close button", !!m.$(".picker .dd-x.glass"));
   const ta = m.$(".kb textarea"); ta.value = "space"; ta.dispatchEvent(new w.Event("input")); await sleep(400);
   check("D18 Kodi: live Input.SendText done=false while typing", eq(m.hass.calls, [["kodi", "call_method", { entity_id: "media_player.kodi", method: "Input.SendText", text: "space", done: false }]]), m.hass.calls);
   ta.value = "space x"; ta.dispatchEvent(new w.Event("input"));
@@ -200,16 +200,16 @@ function ptr(w, el, type, x = 100, y = 100) {
   m.hass.calls[1][2].text = "space";
   check("D19 Kodi: Send -> Input.SendText done", eq(m.hass.calls.pop(), ["kodi", "call_method", { entity_id: "media_player.kodi", method: "Input.SendText", text: "space", done: true }]));
 
-  // Apple TV: live text + wants-text bar
+  // apple_tv: live text + wants-text bar
   m.card.remove();
   m = mount(w, CONFIG(), states({ "media_player.kodi": { state: "idle" }, "media_player.lr_tv": { attributes: { source: "Apple TV" } }, "binary_sensor.lr_keyboard": { state: "on" } }));
-  check("D20 Apple TV active via TV input", m.card.activeEntity === "media_player.lr_appletv");
-  check("D21 keyboard banner shown (iOS-style)", m.$(".wants").classList.contains("show") && m.$(".wants .t1").textContent === "Living Room Apple TV Keyboard" &&
-    m.$(".wants .t2").textContent === "Keyboard Input" && /^Enter text on your Apple TV using your (iOS )?keyboard\. Press to type\.$/.test(m.$(".wants .t3").textContent), m.$(".wants").textContent);
+  check("D20 apple_tv active via TV input", m.card.activeEntity === "media_player.lr_appletv");
+  check("D21 keyboard banner shown (notification-style)", m.$(".wants").classList.contains("show") && m.$(".wants .t1").textContent === "Living Room Apple TV Keyboard" &&
+    m.$(".wants .t2").textContent === "Keyboard Input" && /^Enter text on Living Room Apple TV using your keyboard\. Press to type\.$/.test(m.$(".wants .t3").textContent), m.$(".wants").textContent);
   check("D21b banner sits at the top of the remote, not in the pad", m.$(".wants").parentElement === m.$(".root") && !!m.$(".wants .appicon svg"));
   m.$(".wants").click();
   const ta2 = m.$(".kb textarea"); ta2.value = "star"; ta2.dispatchEvent(new w.Event("input")); await sleep(400);
-  check("D22 Apple TV: live set_keyboard_text", eq(m.hass.calls.pop(), ["apple_tv", "set_keyboard_text", { config_entry_id: "ENTRY1", text: "star" }]));
+  check("D22 apple_tv: live set_keyboard_text", eq(m.hass.calls.pop(), ["apple_tv", "set_keyboard_text", { config_entry_id: "ENTRY1", text: "star" }]));
   m.card.hass = fakeHass(states({ "media_player.kodi": { state: "idle" }, "media_player.lr_tv": { attributes: { source: "Apple TV" } } }));
   check("D23 bar hides when sensor turns off", !m.$(".wants").classList.contains("show"));
 
@@ -224,9 +224,9 @@ function ptr(w, el, type, x = 100, y = 100) {
   check("D26 timers cleared on disconnect", m.card._timers.size === 0);
 
   // ---- B: banner wording --------------------------------------------------------------
-  check("B1 Apple TV wording (iOS)", eq(H.bannerText({ platform: "apple_tv" }, "Den", true), { title: "Den Keyboard", line2: "Keyboard Input", body: "Enter text on your Apple TV using your iOS keyboard. Press to type." }));
+  check("B1 apple_tv wording (iOS)", eq(H.bannerText({ platform: "apple_tv" }, "Den"), { title: "Den Keyboard", line2: "Keyboard Input", body: "Enter text on Den using your keyboard. Press to type." }));
   check("B2 Kodi wording", H.bannerText({ platform: "kodi" }, "Kodi", false).body === "Enter text on Kodi using your keyboard. Press to type.");
-  check("B3 LG wording", H.bannerText({ platform: "webostv" }, "TV", true).body === "Enter text on your LG TV using your iOS keyboard. Press to type.");
+  check("B3 LG wording", H.bannerText({ platform: "webostv" }, "TV").body === "Enter text on your LG TV using your keyboard. Press to type.");
   check("B4 generic uses the name", H.bannerText({ platform: "generic" }, "Shield", false).body.startsWith("Enter text on Shield"));
 
   // ---- I: input switching -----------------------------------------------------------
@@ -275,13 +275,13 @@ function ptr(w, el, type, x = 100, y = 100) {
   check("I25 other keys unaffected", m.hass.calls.length === 2 && m.hass.calls[1][2].method === "Input.Back");
   m.card.remove();
 
-  // ---- PW: power (Apple TV) ------------------------------------------------------------
+  // ---- PW: power (apple_tv) ------------------------------------------------------------
   {
     const atv = H.normaliseConfig(CONFIG()).players[0];
     const on = H.stepsFor(atv, "power", states({ "media_player.lr_appletv": { state: "playing" } }));
     const off = H.stepsFor(atv, "power", states({ "media_player.lr_appletv": { state: "standby" } }));
-    check("PW1 Apple TV power on -> media_player.turn_off", eq(on, [["media_player", "turn_off", { entity_id: "media_player.lr_appletv" }]]), on);
-    check("PW2 Apple TV power off/standby -> media_player.turn_on", eq(off, [["media_player", "turn_on", { entity_id: "media_player.lr_appletv" }]]), off);
+    check("PW1 apple_tv power on -> media_player.turn_off", eq(on, [["media_player", "turn_off", { entity_id: "media_player.lr_appletv" }]]), on);
+    check("PW2 apple_tv power off/standby -> media_player.turn_on", eq(off, [["media_player", "turn_on", { entity_id: "media_player.lr_appletv" }]]), off);
     check("PW3 no power long-press: nothing sends remote turn_off/suspend with hold",
       !H.PLATFORMS.apple_tv.keys.power_hold && !Object.values(H.PLATFORMS.apple_tv.keys).some((f) => { const st = f(atv, { state: "on" }); return st && st[1] === "send_command" && /turn_off|turn_on|suspend|wakeup/.test(st[2].command); }));
     w.localStorage.clear();
@@ -326,7 +326,7 @@ function ptr(w, el, type, x = 100, y = 100) {
     [["Info", [["kodi", "call_method", { entity_id: "media_player.kodi", method: "Input.Info" }]]], ["Lights", [["scene", "turn_on", { entity_id: "scene.movie" }]]]]));
   check("O4 more: false", H.moreItems(SP({ more: false }), AVRS).length === 0);
   check("O5 validation of more", bad({ players: [{ entity: "media_player.k", more: [{ name: "x" }] }] }) && bad({ players: [{ entity: "media_player.k", more: "info" }] }));
-  check("O6 channels: Apple TV + LG on, Kodi off unless asked", H.hasChannels(H.normaliseConfig(CONFIG()).players[0]) && H.hasChannels(H.normaliseConfig(CONFIG()).players[2]) && !H.hasChannels(SP({})) && H.hasChannels(SP({ channels: true })));
+  check("O6 channels: apple_tv + LG on, Kodi off unless asked", H.hasChannels(H.normaliseConfig(CONFIG()).players[0]) && H.hasChannels(H.normaliseConfig(CONFIG()).players[2]) && !H.hasChannels(SP({})) && H.hasChannels(SP({ channels: true })));
   check("O7 LG channel keys", eq(H.stepsFor(H.normaliseConfig(CONFIG()).players[2], "channel_up", states()), [["webostv", "button", { entity_id: "media_player.lr_tv", button: "CHANNELUP" }]]));
 
   // DOM: bottom row, menus
@@ -363,7 +363,7 @@ function ptr(w, el, type, x = 100, y = 100) {
   check("O19 + tab still repeats while held", m.hass.calls.filter((c) => c[1] === "volume_up").length >= 2);
   m.card.remove();
 
-  // ---- CH: Apple's CH control, row always shown (0.1.4, Grok Bot 11 Oct 2026) -----------------
+  // ---- CH: CH control, row always shown (0.1.4, Grok Bot 11 Oct 2026) -----------------
   {
     const css = () => b.$("style").textContent;
     w.localStorage.clear();
@@ -375,11 +375,11 @@ function ptr(w, el, type, x = 100, y = 100) {
     ptr(w, pad, "pointerdown", 100, 100); ptr(w, pad, "pointerup", 100, 100); await sleep(10);
     check("CH4 tap on the pad -> select", b.hass.calls.length === n0 + 1 && /Select/.test(JSON.stringify(b.hass.calls.slice(-1)[0])));
     b.card.remove();
-    // Apple TV: collapsed CH with caps; tap -> expand (no command); chevrons send channel keys; tap CH -> collapse
+    // apple_tv: collapsed CH with caps; tap -> expand (no command); chevrons send channel keys; tap CH -> collapse
     w.localStorage.clear();
     b = mount(w, { ...CONFIG(), channel_timeout: 300 }, states()); b.card._writePick("media_player.lr_appletv"); b.card.hass = { ...b.hass, states: states() };
     const ch = () => b.$(".ch"), chl = () => b.$(".chl");
-    check("CH5 Apple TV: CH shown collapsed, in the row's 5th slot", !ch().classList.contains("gone") && !ch().classList.contains("open") && chl().textContent === "CH" && [...b.$(".inner").children].indexOf(ch()) === 4 && chl().getAttribute("aria-expanded") === "false");
+    check("CH5 apple_tv: CH shown collapsed, in the row's 5th slot", !ch().classList.contains("gone") && !ch().classList.contains("open") && chl().textContent === "CH" && [...b.$(".inner").children].indexOf(ch()) === 4 && chl().getAttribute("aria-expanded") === "false");
     check("CH6 each chevron button holds a thin cap and a chevron", b.card.shadowRoot.querySelectorAll(".ch .chb .cap").length === 2 && b.card.shadowRoot.querySelectorAll(".ch .chb .chev").length === 2);
     check("CH7 collapsed: chevron buttons don't take taps; open: they do, and they animate (transitions)", /\.ch \.chb \{[^}]*pointer-events: none/.test(css()) && /\.ch\.open \.chb \{[^}]*pointer-events: auto/.test(css()) && /\.ch > button \{[^}]*transition: transform \.22s/.test(css()) && /\.ch \.chb path \{[^}]*transition: opacity/.test(css()));
     check("CH8 open stack rises above the row: up above CH above down", /\.ch\.open \.chb\.up \{ transform: translateY\(-73px\)/.test(css()) && /\.ch\.open \.chl \{ transform: translateY\(-40px\)/.test(css()) && /\.ch\.open \.chb\.dn \{ transform: translateY\(-7px\)/.test(css()));
@@ -388,7 +388,7 @@ function ptr(w, el, type, x = 100, y = 100) {
     const up = b.$('.ch [data-key="channel_up"]'); ptr(w, up, "pointerdown"); ptr(w, up, "pointerup"); await sleep(10);
     const dn = b.$('.ch [data-key="channel_down"]'); ptr(w, dn, "pointerdown"); ptr(w, dn, "pointerup"); await sleep(10);
     const sent = JSON.stringify(b.hass.calls.slice(n1));
-    check("CH10 open: up/down send channel_up / channel_down to the Apple TV remote", /channel_up/.test(sent) && /channel_down/.test(sent) && /remote\.lr_appletv/.test(sent), b.hass.calls.slice(n1));
+    check("CH10 open: up/down send channel_up / channel_down to the apple_tv remote", /channel_up/.test(sent) && /channel_down/.test(sent) && /remote\.lr_appletv/.test(sent), b.hass.calls.slice(n1));
     const n2 = b.hass.calls.length; chl().click(); await sleep(10);
     check("CH11 tap CH again -> collapses, sends nothing", !ch().classList.contains("open") && b.hass.calls.length === n2);
     chl().click(); await sleep(200);
@@ -411,7 +411,7 @@ function ptr(w, el, type, x = 100, y = 100) {
         && /\.ch \.chb\.up \{ transform: translateY\(-14px\)/.test(cssT) && /\.ch \.chb\.dn \{ transform: translateY\(14px\)/.test(cssT) && /\.ch > button \{ position: absolute; left: 50%; top: 50%;/.test(cssT));
     }
     {
-      const sm = mount(w, { ...CONFIG(), show_mic: true }, states({ "binary_sensor.lr_keyboard": { state: "on" } })); // 0.1.8: Apple TV needs keyboard focus
+      const sm = mount(w, { ...CONFIG(), show_mic: true }, states({ "binary_sensor.lr_keyboard": { state: "on" } })); // 0.1.8: apple_tv needs keyboard focus
       check("MIC1 show_mic: true brings the mic back (opens the text box)", sm.$(".mic").style.display === "" && (sm.$(".mic").click(), sm.$(".kb").classList.contains("show")));
       sm.card.remove();
       check("MIC2 show_mic validation + default false", bad({ ...CONFIG(), show_mic: "yes" }) && H.normaliseConfig(CONFIG()).show_mic === false);
@@ -438,17 +438,17 @@ function ptr(w, el, type, x = 100, y = 100) {
     q.$(".pill").click(); q.card.shadowRoot.querySelector('[data-act="pick:media_player.kodi"]').click(); await sleep(20);
     check("IP7 manual pick Kodi -> Arcam UHD (TV already on AV Receiver: skipped)", eq(q.hass.calls, [["media_player", "select_source", { entity_id: "media_player.avr", source: "UHD" }]]), q.hass.calls);
     q.$(".pill").click(); q.card.shadowRoot.querySelector('[data-act="pick:media_player.lr_appletv"]').click(); await sleep(20);
-    check("IP8 manual pick Apple TV -> PVR skipped (AVR state still PVR)", q.hass.calls.length === 1);
+    check("IP8 manual pick apple_tv -> PVR skipped (AVR state still PVR)", q.hass.calls.length === 1);
     q.$(".pill").click(); q.card.shadowRoot.querySelector('[data-act="pick:auto"]').click(); await sleep(20);
     check("IP9 back to Auto (Kodi) -> no switch (on_auto off)", q.hass.calls.length === 1, q.hass.calls);
     // Auto switches by itself (TV input changes to Apple TV)
     q.card.hass = { ...q.hass, states: states({ "media_player.avr": { attributes: { source: "UHD" } }, "media_player.lr_tv": { attributes: { source: "Apple TV" } } }) }; await sleep(20);
-    check("IP10 Auto moving to Apple TV doesn't fight (on_auto false)", q.card.activeEntity === "media_player.lr_appletv" && q.hass.calls.length === 1, q.hass.calls);
+    check("IP10 Auto moving to apple_tv doesn't fight (on_auto false)", q.card.activeEntity === "media_player.lr_appletv" && q.hass.calls.length === 1, q.hass.calls);
     q.card.remove();
     pc.players[0].input.on_auto = true;
     q = mount(w, pc, states({ "media_player.avr": { attributes: { source: "UHD" } } }));
     q.card.hass = { ...q.hass, states: states({ "media_player.avr": { attributes: { source: "UHD" } }, "media_player.lr_tv": { attributes: { source: "Apple TV" } } }) }; await sleep(20);
-    check("IP11 on_auto: Auto moving to Apple TV -> PVR", eq(q.hass.calls, [["media_player", "select_source", { entity_id: "media_player.avr", source: "PVR" }]]), q.hass.calls);
+    check("IP11 on_auto: Auto moving to apple_tv -> PVR", eq(q.hass.calls, [["media_player", "select_source", { entity_id: "media_player.avr", source: "PVR" }]]), q.hass.calls);
     q.card.remove(); w.localStorage.clear();
   }
 
@@ -484,7 +484,7 @@ function ptr(w, el, type, x = 100, y = 100) {
     check("KB10b timer set doesn't grow while polling", k.card._timers.size <= 1, k.card._timers.size);
     check("KB11 a single subscription even with many hass updates", (() => { for (let i = 0; i < 5; i++) k.card.hass = { ...k.hass, states: kst() }; return k.hass.subs.filter((x) => x.live).length === 1; })());
     k.hass.fire(ev(10103, "Virtual keyboard"));
-    check("KB12 keyboard open -> Apple-style banner", k.$(".wants").classList.contains("show") && k.$(".wants .t1").textContent === "Kodi Keyboard" && /^Enter text on Kodi/.test(k.$(".wants .t3").textContent));
+    check("KB12 keyboard open -> notification-style banner", k.$(".wants").classList.contains("show") && k.$(".wants .t1").textContent === "Kodi Keyboard" && /^Enter text on Kodi/.test(k.$(".wants .t3").textContent));
     k.hass.fire(ev(10103, "Virtual keyboard", "media_player.other"));
     k.hass.fire(ev(10000, "Home"));
     check("KB13 closes -> banner hides; other entities ignored", !k.$(".wants").classList.contains("show"));
@@ -516,7 +516,7 @@ function ptr(w, el, type, x = 100, y = 100) {
     Object.defineProperty(w.document, "visibilityState", { configurable: true, get: () => "visible" });
     w.document.dispatchEvent(new w.Event("visibilitychange")); await sleep(20);
     check("KB18 visible again -> restarts", polls().length === b2 + 1);
-    // switch to Apple TV
+    // switch to the apple_tv player
     k.card._writePick("media_player.lr_appletv"); k.card.hass = { ...k.hass, states: kst() };
     const b3 = polls().length; await sleep(1100);
     check("KB19 another player picked -> stops", polls().length === b3 && k.hass.subs.filter((x) => x.live).length === 0);
@@ -533,6 +533,33 @@ function ptr(w, el, type, x = 100, y = 100) {
     check("KB22 no hass.connection -> no polling", polls().length === 0);
     k.card.remove();
     w.localStorage.clear();
+  }
+
+  // ---- PK: device picker dropdown + neutral naming (0.1.10, Grok Bot 11 Oct 2026) ----
+  {
+    w.localStorage.clear();
+    const k = mount(w, CONFIG(), states());
+    const css = k.$("style").textContent;
+    check("PK1 picker is a dropdown under the pill, never a bottom sheet", k.$(".picker").classList.contains("dd-bg") && !k.$(".picker").classList.contains("sheet-bg") && !k.$(".picker .sheet") &&
+      /\.dd \{ position: fixed; top: var\(--dd-top/.test(css) && /transform-origin: 50% 0; transform: translateY\(-14px\) scaleY\(\.7\)/.test(css));
+    k.$(".pill").click();
+    check("PK2 opening: shown, pill marked open (chevron turns), aria-expanded", k.$(".picker").classList.contains("show") && k.$(".pill").classList.contains("open") &&
+      k.$(".pill").getAttribute("aria-expanded") === "true" && /\.pill\.open \.chev \{ transform: rotate\(90deg\)/.test(css));
+    const rows = [...k.card.shadowRoot.querySelectorAll(".picker .opt")];
+    check("PK3 rows: Auto, players, Exit; tick first (left) and only on the selected row; generic icons only",
+      rows.length === 6 && rows[0].dataset.act === "pick:auto" && rows[5].dataset.act === "exit" && rows.every((r) => r.firstElementChild.classList.contains("tick")) &&
+      rows.filter((r) => r.querySelector(".tick").textContent === "\u2713").length === 1 && rows[0].classList.contains("sel") && !k.$(".picker ha-icon") && !/mdi:apple/.test(k.$(".picker").innerHTML));
+    k.$(".pill").click();
+    check("PK4 tapping the pill again closes it", !k.$(".picker").classList.contains("show") && !k.$(".pill").classList.contains("open"));
+    k.$(".pill").click(); k.$(".picker").dispatchEvent(new w.MouseEvent("click", { bubbles: true }));
+    check("PK5 tapping outside the list closes it", !k.$(".picker").classList.contains("show"));
+    k.$(".pill").click(); k.$(".picker .dd-x").click();
+    check("PK6 close button closes it", !k.$(".picker").classList.contains("show") && !k.$(".pill").classList.contains("open"));
+    check("PK7 no platform logo icons; neutral banner wording", !/mdi:apple/.test(JSON.stringify(Object.values(H.PLATFORMS).map((p) => p.icon))) &&
+      !/iOS|Apple TV/.test(H.bannerText({ platform: "apple_tv" }, "Den").body));
+    const src = fs.readFileSync(path.join(ROOT, "glass-remote-card.js"), "utf8");
+    check("PK8 no design comparisons or trademark style names in the code", !/Liquid|Siri|iOS Remote|Apple's|Apple-style|Apple-TV-Remote|SF Pro|-apple-system|tvOS/.test(src));
+    k.card.remove(); w.localStorage.clear();
   }
 
   // ---- LAY: tablet / wide layout (0.1.9, Grok Bot 11 Oct 2026) ----
@@ -568,7 +595,7 @@ function ptr(w, el, type, x = 100, y = 100) {
       H.kbFocus(pl("media_player.lr_tv"), states()) === null);
     let f = mount(w, CONFIG(), states(atv));
     f.$(".kbd").click();
-    check("FOC2 Apple TV, no text field focused -> no sheet, glass hint instead",
+    check("FOC2 apple_tv, no text field focused -> no sheet, glass hint instead",
       !f.$(".kb").classList.contains("show") && f.$(".toast").classList.contains("show") && f.$(".toast").textContent === "No text field selected on Living Room Apple TV" && f.hass.calls.length === 0,
       f.$(".toast").textContent);
     f.card._toast("x", 40); await sleep(90);
