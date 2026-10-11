@@ -327,7 +327,7 @@ function ptr(w, el, type, x = 100, y = 100) {
   const dcfg = CONFIG(); dcfg.players[1].sources = { entity: "media_player.avr", include: [{ UHD: "Kodi" }, { PVR: "Apple TV" }] };
   m = mount(w, dcfg, AVRS);
   check("O8 bottom row order: sources | -10 | ... | +10 | CH", eq([...m.$(".inner").children].map((e) => e.className.split(" ")[0] || e.dataset.key), ["src", "skip_back", "more", "skip_fwd", "ch"]));
-  check("O9 Kodi: CH chevrons hidden (toggle stays), sources + more shown", [...m.card.shadowRoot.querySelectorAll(".ch .chb")].every((x) => x.classList.contains("gone")) && !m.$(".chl").classList.contains("gone") && !m.$(".src").classList.contains("gone") && !m.$(".more").classList.contains("gone"));
+  check("O9 Kodi: CH slot hidden, sources + more shown", m.$(".ch").classList.contains("gone") && !m.$(".src").classList.contains("gone") && !m.$(".more").classList.contains("gone"));
   check("O10 no separate info/subtitle buttons, mic still on the right edge", !m.$('.inner [data-key="info"]') && !!m.$(".mic"));
   m.$(".src").click(); await sleep(10);
   const mis = [...m.card.shadowRoot.querySelectorAll(".menu .mi")];
@@ -356,52 +356,48 @@ function ptr(w, el, type, x = 100, y = 100) {
   check("O19 + tab still repeats while held", m.hass.calls.filter((c) => c[1] === "volume_up").length >= 2);
   m.card.remove();
 
-  // ---- BR: bottom row toggle like Apple's iOS Remote (0.1.3, Grok Bot 11 Oct 2026) ------------
+  // ---- CH: Apple's CH control, row always shown (0.1.4, Grok Bot 11 Oct 2026) -----------------
   {
+    const css = () => b.$("style").textContent;
     w.localStorage.clear();
-    let b = mount(w, dcfg, AVRS);
-    const inner = () => b.$(".inner"), chl = () => b.$(".chl");
-    check("BR1 Kodi (no channels): row collapsed by default", !inner().classList.contains("open") && chl().getAttribute("aria-expanded") === "false");
-    check("BR2 Kodi toggle is a chevron (not CH) in the CH slot", chl().textContent === "" && chl().querySelector("svg") && chl().dataset.label === "up" && chl().closest(".ch") === b.$(".inner .ch"));
-    check("BR3 the row only catches taps on its own buttons (pad stays a touchpad)", /\.inner \{[^}]*pointer-events: none/.test(b.$("style").textContent) && /\.inner:not\(\.open\) > button[^{]*\{[^}]*pointer-events: none/.test(b.$("style").textContent));
-    chl().click();
-    check("BR4 tap toggle -> row opens, chevron flips down, no service call", inner().classList.contains("open") && chl().dataset.label === "down" && chl().getAttribute("aria-expanded") === "true" && b.hass.calls.length === 0);
-    b.$(".more").click(); await sleep(10);
-    check("BR5 More still opens its menu from the open row", b.$(".menu-bg").classList.contains("show"));
-    b.$(".menu-bg").click();
-    b.$(".src").click(); await sleep(10);
-    check("BR6 Sources still opens its menu", b.$(".menu-bg").classList.contains("show") && b.$(".menu .mt").textContent === "Sources");
-    b.$(".menu-bg").click();
-    const sk = b.$('.inner [data-key="skip_fwd"]'); ptr(w, sk, "pointerdown"); ptr(w, sk, "pointerup"); await sleep(10);
-    check("BR7 +10 still sends the skip", /Player\.Seek/.test(JSON.stringify(b.hass.calls.slice(-1)[0])), b.hass.calls.slice(-1)[0]);
-    // the pad itself still takes taps and swipes while the row is open
+    let b = mount(w, dcfg, AVRS); // Kodi active, no channels
+    check("CH1 row always visible: no hide toggle, no 'open' gating on the row", !/\.inner:not\(\.open\)/.test(css()) && !b.$(".inner").classList.contains("open") && !b.$(".src").classList.contains("gone") && !b.$(".more").classList.contains("gone"));
+    check("CH2 Kodi (no channel keys): CH slot hidden, no chevron toggle", b.$(".ch").classList.contains("gone") && !b.$('.inner [data-act="row"]'));
+    check("CH3 the row only catches taps on its own buttons (pad stays a touchpad)", /\.inner \{[^}]*pointer-events: none/.test(css()));
     const pad = b.$(".pad"); const n0 = b.hass.calls.length;
     ptr(w, pad, "pointerdown", 100, 100); ptr(w, pad, "pointerup", 100, 100); await sleep(10);
-    check("BR8 tap on the pad while open -> select, row stays open", b.hass.calls.length === n0 + 1 && /Select/.test(JSON.stringify(b.hass.calls.slice(-1)[0])) && inner().classList.contains("open"), b.hass.calls.slice(-1)[0]);
-    ptr(w, pad, "pointerdown", 100, 100); ptr(w, pad, "pointermove", 100, 40); ptr(w, pad, "pointerup", 100, 40); await sleep(10);
-    check("BR9 swipe on the pad while open -> up", /Up/.test(JSON.stringify(b.hass.calls.slice(-1)[0])), b.hass.calls.slice(-1)[0]);
-    chl().click();
-    check("BR10 tap toggle again -> row hides", !inner().classList.contains("open") && chl().dataset.label === "up");
+    check("CH4 tap on the pad -> select", b.hass.calls.length === n0 + 1 && /Select/.test(JSON.stringify(b.hass.calls.slice(-1)[0])));
     b.card.remove();
-    // Apple TV (channels): CH label is the toggle, chevrons send channel keys when open
+    // Apple TV: collapsed CH with caps; tap -> expand (no command); chevrons send channel keys; tap CH -> collapse
     w.localStorage.clear();
-    b = mount(w, CONFIG(), states()); b.card._writePick("media_player.lr_appletv"); b.card.hass = { ...b.hass, states: states() };
-    check("BR11 Apple TV: 'CH' label visible, row collapsed", chl().textContent === "CH" && !inner().classList.contains("open") && b.card.activeEntity === "media_player.lr_appletv");
-    check("BR12 chevrons present but hidden until open", [...b.card.shadowRoot.querySelectorAll(".ch .chb")].every((x) => !x.classList.contains("gone")) && /\.inner:not\(\.open\) \.ch \.chb/.test(b.$("style").textContent));
-    chl().click();
+    b = mount(w, { ...CONFIG(), channel_timeout: 300 }, states()); b.card._writePick("media_player.lr_appletv"); b.card.hass = { ...b.hass, states: states() };
+    const ch = () => b.$(".ch"), chl = () => b.$(".chl");
+    check("CH5 Apple TV: CH shown collapsed, in the row's 5th slot", !ch().classList.contains("gone") && !ch().classList.contains("open") && chl().textContent === "CH" && [...b.$(".inner").children].indexOf(ch()) === 4 && chl().getAttribute("aria-expanded") === "false");
+    check("CH6 each chevron button holds a thin cap and a chevron", b.card.shadowRoot.querySelectorAll(".ch .chb .cap").length === 2 && b.card.shadowRoot.querySelectorAll(".ch .chb .chev").length === 2);
+    check("CH7 collapsed: chevron buttons don't take taps; open: they do, and they animate (transitions)", /\.ch \.chb \{[^}]*pointer-events: none/.test(css()) && /\.ch\.open \.chb \{[^}]*pointer-events: auto/.test(css()) && /\.ch > button \{[^}]*transition: transform \.22s/.test(css()) && /\.ch \.chb path \{[^}]*transition: opacity/.test(css()));
+    check("CH8 open stack rises above the row: up above CH above down", /\.ch\.open \.chb\.up \{ transform: translateY\(-73px\)/.test(css()) && /\.ch\.open \.chl \{ transform: translateY\(-40px\)/.test(css()) && /\.ch\.open \.chb\.dn \{ transform: translateY\(-7px\)/.test(css()));
+    const n1 = b.hass.calls.length; chl().click(); await sleep(10);
+    check("CH9 tap collapsed CH -> expands, sends nothing", ch().classList.contains("open") && chl().getAttribute("aria-expanded") === "true" && b.hass.calls.length === n1);
     const up = b.$('.ch [data-key="channel_up"]'); ptr(w, up, "pointerdown"); ptr(w, up, "pointerup"); await sleep(10);
-    check("BR13 open, CH up -> channel_up on the Apple TV remote", inner().classList.contains("open") && /channel_up/.test(JSON.stringify(b.hass.calls)), b.hass.calls);
-    const nC = b.hass.calls.length; chl().click(); await sleep(10);
-    check("BR14 tapping 'CH' again hides the row, sends nothing", !inner().classList.contains("open") && b.hass.calls.length === nC && chl().textContent === "CH");
+    const dn = b.$('.ch [data-key="channel_down"]'); ptr(w, dn, "pointerdown"); ptr(w, dn, "pointerup"); await sleep(10);
+    const sent = JSON.stringify(b.hass.calls.slice(n1));
+    check("CH10 open: up/down send channel_up / channel_down to the Apple TV remote", /channel_up/.test(sent) && /channel_down/.test(sent) && /remote\.lr_appletv/.test(sent), b.hass.calls.slice(n1));
+    const n2 = b.hass.calls.length; chl().click(); await sleep(10);
+    check("CH11 tap CH again -> collapses, sends nothing", !ch().classList.contains("open") && b.hass.calls.length === n2);
+    chl().click(); await sleep(200);
+    ptr(w, up, "pointerdown"); ptr(w, up, "pointerup"); await sleep(200);
+    check("CH12 using a chevron restarts the fold-back timer", ch().classList.contains("open"));
+    await sleep(250);
+    check("CH13 folds back after channel_timeout without use", !ch().classList.contains("open") && !b.card._db_ch);
+    b.card._writePick("media_player.kodi"); chl().click(); b.card.hass = { ...b.hass, states: states() };
+    check("CH14 switching to a player without channels hides and folds the CH control", ch().classList.contains("gone") && !ch().classList.contains("open"));
     b.card.remove();
-    // bottom_row: always keeps the 0.1.2 behaviour
     w.localStorage.clear();
-    b = mount(w, { ...CONFIG(), bottom_row: "always" }, states());
-    check("BR15 bottom_row: always -> row open, no toggle on Kodi", inner().classList.contains("open") && chl().classList.contains("gone"));
-    chl().click();
-    check("BR16 ... and it can't be collapsed", inner().classList.contains("open"));
+    b = mount(w, { ...CONFIG(), channel_timeout: 0 }, states()); b.card._writePick("media_player.lr_appletv"); b.card.hass = { ...b.hass, states: states() };
+    b.$(".chl").click(); await sleep(50);
+    check("CH15 channel_timeout: 0 -> stays open, no timer", b.$(".ch").classList.contains("open") && !b.card._db_ch);
     b.card.remove();
-    check("BR17 bottom_row validation", bad({ ...CONFIG(), bottom_row: "sometimes" }) && H.normaliseConfig(CONFIG()).bottom_row === "toggle");
+    check("CH16 channel_timeout validation + default 5000", bad({ ...CONFIG(), channel_timeout: "5s" }) && bad({ ...CONFIG(), channel_timeout: -1 }) && H.normaliseConfig(CONFIG()).channel_timeout === 5000);
     w.localStorage.clear();
   }
 

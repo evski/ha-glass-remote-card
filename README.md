@@ -28,7 +28,7 @@ Single JavaScript file. No dependencies: no card-mod, browser_mod, kiosk-mode or
 - **Now-playing pill.** Shows artwork, title and `Device · episode/app/state`. Tap it to open the device picker, which is built in (no browser_mod).
 - **Touchpad.** Swipe for arrows; keep holding after a swipe to keep moving. Tap to select, long-press for the context menu.
 - **Buttons:**
-  - A bottom row inside the pad, like Apple's iOS Remote: **sources list | -10 | ⋯ more | +10 | CH**. It is hidden until you tap **CH** in the pad's bottom-right corner (a small chevron on devices without channel keys); tap it again to hide it. Set `bottom_row: always` to keep it showing.
+  - A bottom row inside the pad, like Apple's iOS Remote: **sources list | -10 | ⋯ more | +10 | CH**. Tap **CH** to open Apple's channel stack (up chevron, CH, down chevron). Tap CH again to close it, or it closes by itself after 5 s. CH only shows on devices with channel keys.
   - **Sources** opens a glass picker with the player's sources, or those of your receiver or TV. The current source is ticked.
   - **More (⋯)** holds info, subtitles, sound mode and each platform's extras.
   - Play/pause, a big Back button and Home underneath. Long-press Back for the top menu and Home for the platform's extra action.
@@ -125,7 +125,7 @@ source_map:                               # optional: follow the TV's input
 | `players` | **required** | List of players (below). A plain entity id string also works. |
 | `layout` | `fullscreen` | `fullscreen`: a fixed, full-viewport remote that respects safe areas. `card`: a normal card. |
 | `pad_height` | `58dvh` | Touchpad height in full screen (Apple's proportion). It shrinks on small screens. |
-| `bottom_row` | `toggle` | `toggle`: the pad's bottom row (sources, -10, ⋯, +10, CH) stays hidden until you tap CH, like Apple's iOS Remote. `always`: always shown. |
+| `channel_timeout` | `5000` | How long (ms) the open CH stack (up / CH / down) stays open without use before it folds back. `0` = never. |
 | `card_height` | `640px` | Height of the whole card in `card` layout. |
 | `pick_timeout` | `180` | Minutes a manual pick is kept before Auto takes over again. |
 | `source_map` | – | `entity` (the TV), `sources` (input → player), `ignore_sources` (inputs that fall through to ranking), `default_to_tv` (`true`: any other source selects the TV). |

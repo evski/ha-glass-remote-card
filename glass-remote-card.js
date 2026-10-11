@@ -6,15 +6,15 @@
  * https://github.com/evski/ha-glass-remote-card
  * MIT licence.
  *
- * 0.1.3 (Grok Bot, 11 Oct 2026): the pad's bottom row (sources | -10 | more | +10 | CH) now works like
- * Apple's iOS Remote: hidden by default and revealed inside the bottom of the touchpad by tapping the
- * CH control (a small chevron on players without channels); tap it again to hide. `bottom_row: always`
- * keeps the old always-visible row. Sharp CH chevrons and Apple proportions.
+ * 0.1.4 (Grok Bot, 11 Oct 2026): the pad's bottom row (sources | -10 | more | +10 | CH) is always shown,
+ * as on Apple's iOS Remote. Only the CH control changes: a compact "CH" with thin caps above and below
+ * sits in the row; tapping it animates the caps out into an up/down chevron stack (channel up/down).
+ * Tap CH again, or leave it ~5 s (`channel_timeout`), and it folds back. Replaces 0.1.3's hidden row.
  */
 (() => {
   "use strict";
 
-  const VERSION = "0.1.3";
+  const VERSION = "0.1.4";
   const TAG = "glass-remote-card";
   const PICK_KEY = "glass-remote-card:pick:";
 
@@ -61,6 +61,11 @@
     exit: svg('<path d="M14 4.5H6.5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2H14M10 12h10M16.5 8.5 20 12l-3.5 3.5"/>'),
     close: svg('<path d="M6 6l12 12M18 6 6 18"/>', 1.8),
   };
+
+  // CH control (0.1.4, Grok Bot 11 Oct 2026): each glyph holds Apple's collapsed thin cap and the open
+  // chevron; CSS cross-fades and moves them, so it works on iOS Safari (no CSS path morphing there).
+  const CH_UP = '<svg viewBox="4 4.5 16 9" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="cap" stroke-width="1.6" d="M6.2 10.6 10.8 8.4Q12 7.8 13.2 8.4L17.8 10.6"/><path class="chev" stroke-width="2" d="M6.5 12 12 6.5l5.5 5.5"/></svg>';
+  const CH_DOWN = '<svg viewBox="4 4.5 16 9" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="cap" stroke-width="1.6" d="M6.2 7.4 10.8 9.6Q12 10.2 13.2 9.6L17.8 7.4"/><path class="chev" stroke-width="2" d="M6.5 6.5 12 12l5.5-5.5"/></svg>';
 
   // Siri Remote glyph for the keyboard banner's app icon (filled, like the iOS notification).
   const REMOTE_GLYPH = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8.2" y="1.8" width="7.6" height="20.4" rx="2.6" fill="#fff"/>' +
@@ -227,9 +232,9 @@
       pad_height: "58dvh", card_height: "640px", ...config, players,
     };
     if (!["fullscreen", "card"].includes(out.layout)) throw new Error("glass-remote-card: layout must be fullscreen or card");
-    // bottom_row (0.1.3, Grok Bot 11 Oct 2026): toggle = hidden until CH is tapped (Apple), always = old behaviour
-    if (out.bottom_row === undefined) out.bottom_row = "toggle";
-    if (!["toggle", "always"].includes(out.bottom_row)) throw new Error("glass-remote-card: bottom_row must be toggle or always");
+    // channel_timeout (0.1.4, Grok Bot 11 Oct 2026): ms before an expanded CH stack folds back; 0 = never
+    if (out.channel_timeout === undefined) out.channel_timeout = 5000;
+    if (typeof out.channel_timeout !== "number" || out.channel_timeout < 0) throw new Error("glass-remote-card: channel_timeout must be milliseconds (0 = never)");
     return out;
   }
 
@@ -565,25 +570,35 @@
     .badge { width: 30px; height: 30px; margin-left: 17px; border-radius: 50%; display: grid; place-items: center; --s: 15px; -webkit-touch-callout: none; user-select: none; }
     .badge.inert { pointer-events: none; }
     .mic { position: absolute; right: 10px; top: calc(10% + 54px); width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; --s: 19px; z-index: 2; }
-    /* bottom row inside the pad, like Apple's iOS Remote: sources | -10 | (...) | +10 | CH.
-       0.1.3 (Grok Bot, 11 Oct 2026): hidden until the CH control is tapped; the rest of the pad stays a
-       touchpad (the row only catches taps on its own buttons). Proportions from Apple's: five equal
-       columns, icons ~27px centred ~30px above the pad's bottom edge, CH stack ~32px pitch above that. */
-    .inner { position: absolute; left: 6px; right: 6px; bottom: 8px; display: grid; grid-template-columns: repeat(5, 1fr);
+    /* bottom row inside the pad, always shown, like Apple's iOS Remote: sources | -10 | (...) | +10 | CH.
+       The row only catches taps on its own buttons, so the rest of the pad stays a touchpad.
+       0.1.4 (Grok Bot, 11 Oct 2026): proportions from Apple's screenshots (five equal columns, icons ~27px
+       centred ~35px above the pad's bottom edge). CH: collapsed = "CH" in the row with thin caps hugging it;
+       open = the caps slide out and turn into chevrons, CH rises: up chevron, CH, down chevron (~33px pitch). */
+    .inner { position: absolute; left: 6px; right: 6px; bottom: 13px; display: grid; grid-template-columns: repeat(5, 1fr);
       justify-items: center; align-items: end; z-index: 2; pointer-events: none; }
     .inner > button { padding: 8px; --s: 28px; pointer-events: auto; }
     .inner .src, .inner .more { --s: 27px; opacity: .92; }
-    .inner > button, .ch .chb { transition: opacity .22s ease, transform .28s cubic-bezier(.2,.9,.3,1.1), visibility 0s; }
-    .inner:not(.open) > button, .inner:not(.open) .ch .chb { opacity: 0; transform: translateY(8px); visibility: hidden; pointer-events: none;
-      transition: opacity .15s ease, transform .2s ease, visibility 0s linear .2s; }
-    .inner .gone, .inner.open .gone { visibility: hidden; pointer-events: none; }
-    .ch { display: flex; flex-direction: column; align-items: center; line-height: 1; margin-bottom: 17px; pointer-events: none; }
-    .ch .chb { width: 44px; height: 36px; padding: 0; display: grid; place-items: center; pointer-events: auto; }
-    .ch .chb svg { width: 19px; height: 11px; display: block; }
-    .ch .chl { min-width: 44px; height: 28px; padding: 0 4px; display: grid; place-items: center; pointer-events: auto;
-      font-size: 15px; font-weight: 600; letter-spacing: .3px; --s: 19px; }
+    .inner .gone { visibility: hidden; pointer-events: none; }
+    .ch { position: relative; width: 44px; height: 44px; pointer-events: none; --ch-ease: cubic-bezier(.3,.9,.3,1.06); }
+    .ch > button { position: absolute; left: 50%; top: 50%; padding: 0; display: grid; place-items: center;
+      transition: transform .22s var(--ch-ease); }
+    .ch .chl { width: 44px; height: 36px; margin: -18px 0 0 -22px; z-index: 1; pointer-events: auto;
+      font-size: 15px; font-weight: 600; letter-spacing: .3px; line-height: 1; }
     .ch .chl:active { opacity: .6; }
-    .ch .chl .icon { width: 19px; height: 11px; }
+    .ch .chb { width: 44px; height: 30px; margin: -15px 0 0 -22px; pointer-events: none; }
+    .ch .chb svg { width: 22px; height: 12px; display: block; overflow: visible; }
+    .ch .chb path { transition: opacity .2s ease, transform .22s var(--ch-ease); transform-origin: 12px 9px; }
+    .ch .chb .chev { opacity: 0; transform: scale(.85, .5); }
+    .ch .chb.up { transform: translateY(-14px); }
+    .ch .chb.dn { transform: translateY(14px); }
+    .ch.open .chl { transform: translateY(-40px); }
+    .ch.open .chb { pointer-events: auto; }
+    .ch.open .chb.up { transform: translateY(-73px); }
+    .ch.open .chb.dn { transform: translateY(-7px); }
+    .ch.open .chb .cap { opacity: 0; transform: scale(.85, 1.6); }
+    .ch.open .chb .chev { opacity: 1; transform: none; }
+    .ch.open .chb:active { opacity: .6; }
 
     /* glass pop-up menu (sources, sound mode, more) */
     .menu-bg { position: fixed; inset: 0; z-index: 30; display: none; }
@@ -830,12 +845,12 @@
               <button class="tab glass" data-key="volume_down" data-repeat aria-label="Volume down">${icon("minus")}</button>
             </div>
             <button class="mic glass" data-act="keyboard" aria-label="Dictate">${icon("mic")}</button>
-            <div class="inner${c.bottom_row === "always" ? " open" : ""}">
+            <div class="inner">
               <button class="src" data-act="sources" aria-label="Sources">${icon("list")}</button>
               <button data-key="skip_back" aria-label="Back 10 seconds"><span class="icon ib"></span></button>
               <button class="more" data-act="more" aria-label="More">${icon("more")}</button>
               <button data-key="skip_fwd" aria-label="Forward 10 seconds"><span class="icon if"></span></button>
-              <div class="ch"><button class="chb" data-key="channel_up" aria-label="Channel up">${ICONS.chev_up}</button><button class="chl" data-act="row" aria-expanded="false" aria-label="Show channel and playback controls">CH</button><button class="chb" data-key="channel_down" aria-label="Channel down">${ICONS.chev_down}</button></div>
+              <div class="ch"><button class="chb up" data-key="channel_up" aria-label="Channel up" tabindex="-1">${CH_UP}</button><button class="chl" data-act="ch" aria-expanded="false" aria-label="Channels">CH</button><button class="chb dn" data-key="channel_down" aria-label="Channel down" tabindex="-1">${CH_DOWN}</button></div>
             </div>
           </div>
           <div class="bottom">
@@ -868,6 +883,8 @@
       });
       ta.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); this._act("kb-send"); } });
       this._wirePad(r.querySelector(".pad"));
+      // CH chevrons: each use restarts the fold-back timer (0.1.4, Grok Bot 11 Oct 2026)
+      r.querySelectorAll(".ch .chb").forEach((b) => b.addEventListener("pointerdown", () => { if (this._chOpen) this._setChOpen(true); }));
       // speaker badge: press and hold = sound mode menu (the +/- tabs keep hold-to-repeat)
       const badge = r.querySelector(".badge");
       let bt = null;
@@ -1015,7 +1032,7 @@
       const r = this.shadowRoot;
       if (act === "picker") { this._haptic(); this._renderPicker(); r.querySelector(".picker").classList.add("show"); }
       else if (act === "close") this._closeSheets();
-      else if (act === "row") { if (this._config.bottom_row !== "always") { this._haptic(); this._rowOpen = !this._rowOpen; this._renderRow(); } }
+      else if (act === "ch") { this._haptic(); this._setChOpen(!this._chOpen); }
       else if (act === "sources" || act === "more") { this._haptic(); this._openMenu(act, r.querySelector(act === "sources" ? ".src" : ".more")); }
       else if (act === "keyboard") {
         this._haptic();
@@ -1056,25 +1073,16 @@
       this._switching = true;
       this._call(steps).finally(() => { this._switching = false; });
     }
-    /** Open/closed state of the pad's bottom row and its CH toggle (0.1.3, Grok Bot 11 Oct 2026).
-     *  Players with channels: the "CH" label is the toggle and the chevrons appear around it.
-     *  Players without: a small chevron (up = show, down = hide) sits in the same spot. */
-    _renderRow() {
-      const r = this.shadowRoot, p = this.activePlayer; if (!p) return;
-      const always = this._config.bottom_row === "always";
-      const open = always || !!this._rowOpen;
-      const ch = hasChannels(p);
-      const inner = r.querySelector(".inner"), chl = r.querySelector(".chl");
-      inner.classList.toggle("open", open);
-      r.querySelectorAll(".ch .chb").forEach((b) => b.classList.toggle("gone", !ch));
-      const label = ch ? "CH" : (always ? "" : (open ? "down" : "up"));
-      if (chl.dataset.label !== label) {
-        chl.dataset.label = label;
-        chl.innerHTML = label === "CH" ? "CH" : label ? `<span class="icon">${ICONS[label === "up" ? "chev_up" : "chev_down"]}</span>` : "";
-      }
-      chl.classList.toggle("gone", !label);
-      chl.setAttribute("aria-expanded", String(open));
-      chl.setAttribute("aria-label", always ? "Channel" : open ? "Hide playback controls" : "Show playback controls");
+    /** CH control (0.1.4, Grok Bot 11 Oct 2026): collapsed "CH" in the row <-> chevron stack.
+     *  Collapsed, a tap only expands (no command). Folds back after channel_timeout ms without use. */
+    _setChOpen(open) {
+      this._chOpen = !!open;
+      const ch = this.shadowRoot.querySelector(".ch"), chl = this.shadowRoot.querySelector(".chl");
+      ch.classList.toggle("open", this._chOpen);
+      chl.setAttribute("aria-expanded", String(this._chOpen));
+      ch.querySelectorAll(".chb").forEach((b) => (b.tabIndex = this._chOpen ? 0 : -1));
+      clearTimeout(this._db_ch); this._timers.delete(this._db_ch); this._db_ch = null;
+      if (this._chOpen && this._config.channel_timeout > 0) this._debounce("ch", () => this._setChOpen(false), this._config.channel_timeout);
     }
     _closeSheets() { this.shadowRoot.querySelectorAll(".sheet-bg").forEach((s) => s.classList.remove("show")); }
     _friendly(p) { const st = this._states[p.entity]; return p.name || (st && st.attributes && st.attributes.friendly_name) || p.entity; }
@@ -1146,7 +1154,9 @@
       // bottom row: sources | -10 | ... | +10 | CH (each slot keeps its place when hidden)
       r.querySelector(".src").classList.toggle("gone", !sourceMenu(p, this._states));
       r.querySelector(".more").classList.toggle("gone", !moreItems(p, this._states).length);
-      this._renderRow();
+      const chOk = hasChannels(p);
+      r.querySelector(".ch").classList.toggle("gone", !chOk);
+      if (!chOk && this._chOpen) this._setChOpen(false);
       r.querySelector(".badge").classList.toggle("inert", !soundModeMenu(p, this._states));
       if (this._menu && (this._menuKind === "sources" || this._menuKind === "sound_mode")) {
         // keep the tick on the live value while open

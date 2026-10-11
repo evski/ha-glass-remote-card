@@ -4,7 +4,19 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [0.1.3] - unreleased
+## [0.1.4] - unreleased
+
+### Changed
+- The pad's bottom row (sources | -10 | ⋯ | +10 | CH) is always shown again, as on Apple's iOS Remote. 0.1.3's hide/show toggle and its `bottom_row` option are gone.
+- The CH control now works like Apple's. Collapsed, it is a compact "CH" in line with the row, with thin caps above and below. Tapping it expands it into a stack that rises above the row: up chevron, CH, down chevron. The caps slide outward and turn into the chevrons in about 200 ms (CSS transitions, so it works on iOS).
+- Collapsed, a tap only expands the stack and sends no command. Expanded, the chevrons send channel up/down. Tap CH again to fold it back; it also folds back after 5 s without use.
+- Players without channel keys (e.g. Kodi) hide the CH slot again.
+- Row positions match Apple's screenshots.
+
+### Added
+- `channel_timeout`: how long, in ms, before an open CH stack folds back (default `5000`; `0` = never).
+
+## [0.1.3] - unreleased (superseded by 0.1.4)
 
 ### Changed
 - The pad's bottom row (sources | -10 | ⋯ | +10 | CH) now works like Apple's iOS Remote: it is hidden by default, so the touchpad is clear. Tap **CH** in the bottom-right corner of the pad to show it, and tap CH again to hide it. Players without channel keys (e.g. Kodi) get a small chevron in the same spot instead.
