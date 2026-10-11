@@ -225,7 +225,7 @@ function ptr(w, el, type, x = 100, y = 100) {
   check("D26 timers cleared on disconnect", m.card._timers.size === 0);
 
   // ---- B: banner wording --------------------------------------------------------------
-  check("B1 apple_tv wording (iOS)", eq(H.bannerText({ platform: "apple_tv" }, "Den"), { title: "Den Keyboard", line2: "Keyboard Input", body: "Enter text on Den using your keyboard. Press to type." }));
+  check("B1 apple_tv banner wording", eq(H.bannerText({ platform: "apple_tv" }, "Den"), { title: "Den Keyboard", line2: "Keyboard Input", body: "Enter text on Den using your keyboard. Press to type." }));
   check("B2 Kodi wording", H.bannerText({ platform: "kodi" }, "Kodi", false).body === "Enter text on Kodi using your keyboard. Press to type.");
   check("B3 LG wording", H.bannerText({ platform: "webostv" }, "TV").body === "Enter text on your LG TV using your keyboard. Press to type.");
   check("B4 generic uses the name", H.bannerText({ platform: "generic" }, "Shield", false).body.startsWith("Enter text on Shield"));
@@ -617,6 +617,25 @@ function ptr(w, el, type, x = 100, y = 100) {
     c2.card.remove(); cover.remove();
     check("PT15 no trademark wording in the card source beyond the factual integration name",
       !/SF Symbols|Safari|Liquid|Siri|tvOS|iPadOS|iPhone|-apple-system/.test(SRC_NOW()) && !/Apple(?! TV| Inc)/.test(SRC_NOW()));
+    // NAME1 (Grok Bot, 11 Oct 2026): every text file in the repo (README, docs, templates, workflows, examples, scripts, the card),
+    // not just the card source. "Apple TV" (device / HA integration name) and "Apple Inc" (trademark notice) are the only allowed uses.
+    // This test file is skipped because it has to spell the words out to look for them.
+    const BANNED = /\b(?:iPhone|iOS|iPad|iPadOS|Safari|macOS|Mac OS|watchOS|tvOS|Apple Watch|Siri|SF Symbols|SF Pro|Liquid Glass|-apple-system)\b/i;
+    const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => {
+      if ([".git", "node_modules"].includes(e.name)) return [];
+      const p = path.join(d, e.name);
+      return e.isDirectory() ? walk(p) : [p];
+    });
+    const textFiles = walk(ROOT).filter((p) => /\.(md|js|json|ya?ml|html|py|sh|txt)$|LICENSE$/.test(p) && !/package-lock\.json$/.test(p) && p !== __filename);
+    const hits = [];
+    for (const f of textFiles) fs.readFileSync(f, "utf8").split("\n").forEach((line, i) => {
+      const rel = path.relative(ROOT, f) + ":" + (i + 1);
+      if (BANNED.test(line)) hits.push(rel + " " + line.match(BANNED)[0]);
+      if (/Apple(?! TV|%20TV| Inc)/.test(line)) hits.push(rel + " Apple"); // %20 = URL-encoded "Apple TV" in screenshot URLs
+      if (/Apple Inc/.test(line) && !/trademark/i.test(line)) hits.push(rel + " Apple Inc outside the trademark notice");
+    });
+    check("NAME1 no other companies' product names in any repo text file (only 'Apple TV' and the 'Apple Inc' trademark notice)",
+      textFiles.length > 10 && hits.length === 0, hits);
     w.localStorage.clear();
   }
 

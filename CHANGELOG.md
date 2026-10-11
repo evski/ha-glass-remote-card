@@ -17,6 +17,9 @@ Not affiliated with or endorsed by Apple Inc. Apple TV is a trademark of Apple I
 ### Added
 - Keyboard: the pill stays a single button with `aria-haspopup`, `aria-expanded` and `aria-controls` pointing at the list, and Escape closes the picker and returns focus to the pill.
 
+### Docs
+- Neutral wording for phones and browsers in the README (control centre setup), the bug-report template, comments and tests. A test now checks every text file in the repository for other companies' product names; "Apple TV" stays only as the device or integration name and in the trademark notice.
+
 ## [0.1.10] - 2026-10-11
 
 ### Changed
@@ -34,7 +37,7 @@ Not affiliated with or endorsed by Apple Inc. Apple TV is a trademark of Apple I
 - Tablet and wide-screen layout. On screens wider than 3:5 the full-screen remote keeps phone proportions in a centred column. The column is `column_ratio` × the screen height wide (default 0.52, at least 320 px), and `max_width` can cap it. The touchpad grows to fill the height, the top row and the volume tabs sit at the column's edges, and play/pause, Back and Home cluster under the pad. Phones are unchanged.
 
 ### Docs
-- README: screen recordings from a real phone (Kodi in use, and opening the remote from Control Center, with personal items blurred) next to the demo GIF.
+- README: screen recordings from a real phone (Kodi in use, and opening the remote from the phone's control centre, with personal items blurred) next to the demo GIF.
 
 ## [0.1.8] - 2026-10-11
 
@@ -51,7 +54,7 @@ Not affiliated with or endorsed by Apple Inc. Apple TV is a trademark of Apple I
 ### Changed
 - The typing sheet (keyboard button) now matches the rest of the card: the same frosted glass panel and app-icon header as the keyboard banner, a thin close icon in a glass circle, and glass pill Clear and Send buttons instead of coloured text links. The placeholder is shorter ("Type or dictate") and the extra hint line is gone.
 - README: says plainly that no other custom cards or add-ons are needed, only Home Assistant's built-in integrations.
-- README: a demo GIF at the top, and step-by-step instructions for opening the remote from the phone's Control Center with a Home Assistant **Open Page** shortcut (and why URL shortcuts and the phone's volume buttons don't work).
+- README: a demo GIF at the top, and step-by-step instructions for opening the remote from the phone's control centre with a Home Assistant **Open Page** shortcut (and why URL shortcuts and the phone's volume buttons don't work).
 - Screenshots and the social preview re-rendered from 0.1.7 (no mic button, new typing sheet).
 
 ## [0.1.6] - 2026-10-11

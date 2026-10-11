@@ -15,7 +15,7 @@ body:
     attributes: { label: Platform, options: [apple_tv, kodi, webostv, generic] }
   - type: dropdown
     id: client
-    attributes: { label: Where, options: [iOS app, Android app, Desktop browser, Mobile browser] }
+    attributes: { label: Where, options: [Home Assistant companion app (phone or tablet), Desktop browser, Mobile browser, Other] }
   - type: textarea
     id: what
     attributes: { label: What happened, description: "Steps, what you expected, and your card YAML (remove anything private)." }

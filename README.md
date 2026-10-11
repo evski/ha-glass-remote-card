@@ -377,9 +377,9 @@ Notes:
           data: { input: $source }
 ```
 
-## Open it from your phone's Control Center
+## Open it from your phone's control centre
 
-You can put the remote one swipe away in your iPhone's Control Center. You need iOS 18 or later and the Home Assistant companion app, logged in to your server.
+You can put the remote one swipe away in your phone's control centre (the panel you swipe down for quick settings). You need a phone whose control centre can hold **Shortcuts** controls (system versions from 2024 onwards), with the Home Assistant companion app installed and logged in to your server.
 
 1. Open the **Shortcuts** app and tap **+** to make a new shortcut.
 2. Tap **Add Action**, search for **Home Assistant** and choose **Open Page**.
@@ -387,14 +387,14 @@ You can put the remote one swipe away in your iPhone's Control Center. You need 
 4. Rename the shortcut, for example **Remote**: tap the name at the top → **Rename**.
 5. Set its icon: tap the name → **Choose Icon** → **Symbol**, then search for **tv**. Any symbol works; a TV is easy to spot.
 6. Tap **Done**.
-7. Open Control Center, touch and hold an empty space (or tap **+** at the top left) and tap **Add a Control**.
+7. Open the control centre, touch and hold an empty space (or tap **+** at the top left) and tap **Add a Control**.
 8. Search for **Shortcuts**, tap **Shortcut**, then choose **Remote**. Drag the control where you want it and tap an empty space to finish.
 
 Tapping the control now opens the Home Assistant app straight on the remote.
 
-<p align="center"><img src="docs/images/control-center.gif" width="300" alt="Real phone: opening the remote from Control Center, then the device picker, More, Sound Mode and the CH control"><br><sub>On a real phone: Control Center → Remote. Personal tiles are blurred.</sub></p>
+<p align="center"><img src="docs/images/phone-shortcut.gif" width="300" alt="Real phone: opening the remote from the control centre, then the device picker, More, Sound Mode and the CH control"><br><sub>On a real phone: control centre → Remote. Personal tiles are blurred.</sub></p>
 
-**Why not a URL shortcut?** A Shortcut with **Open URL** `homeassistant://navigate/...` looks simpler, but it isn't reliable: if the app is closed or was suspended, iOS often launches it on its default page and the navigate part is lost, or a Safari hop is shown first. **Open Page** is the companion app's own action, so it always lands on the right dashboard.
+**Why not a URL shortcut?** A Shortcut with **Open URL** `homeassistant://navigate/...` looks simpler, but it isn't reliable: if the app is closed or was suspended, the phone often launches it on its default page and the navigate part is lost, or it opens in the mobile browser first. **Open Page** is the companion app's own action, so it always lands on the right dashboard.
 
 **The phone's volume buttons can't drive the remote.** The phone keeps its physical volume buttons for its own volume, and a web page or the dashboard inside the Home Assistant app never gets those button presses. Use the volume tabs on the pad's edge instead.
 
@@ -423,7 +423,7 @@ kiosk_mode:
 ## Limits
 
 - **The TV's own voice assistant can't be triggered** from Home Assistant. Use the keyboard button and your phone keyboard's dictation instead.
-- **The phone's physical volume buttons can't be used.** The phone keeps them for its own volume, and a web page never sees them (see [Control Center](#open-it-from-your-phones-control-center)).
+- **The phone's physical volume buttons can't be used.** The phone keeps them for its own volume, and a web page never sees them (see [Open it from your phone's control centre](#open-it-from-your-phones-control-centre)).
 - **A web page can't open the phone keyboard without a tap.** That's why the keyboard notification needs one tap.
 - **`apple_tv`: info and subtitles both open the device's info panel.** There are no separate keys for them.
 - **LG rewind/fast-forward** change playback speed; they don't jump 10 seconds.

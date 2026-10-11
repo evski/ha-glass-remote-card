@@ -93,7 +93,7 @@
   };
 
   // CH control (0.1.4, Grok Bot 11 Oct 2026): each glyph holds the collapsed thin cap and the open
-  // chevron; CSS cross-fades and moves them, so it works in mobile WebKit browsers (no CSS path morphing there).
+  // chevron; CSS cross-fades and moves them, so it works in mobile browsers without CSS path morphing.
   const CH_UP = '<svg viewBox="4 4.5 16 9" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="cap" stroke-width="1.6" d="M6.2 10.6 10.8 8.4Q12 7.8 13.2 8.4L17.8 10.6"/><path class="chev" stroke-width="2" d="M6.5 12 12 6.5l5.5 5.5"/></svg>';
   const CH_DOWN = '<svg viewBox="4 4.5 16 9" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="cap" stroke-width="1.6" d="M6.2 7.4 10.8 9.6Q12 10.2 13.2 9.6L17.8 7.4"/><path class="chev" stroke-width="2" d="M6.5 6.5 12 12l5.5-5.5"/></svg>';
 
@@ -1215,7 +1215,7 @@
         r.querySelector(".kb-title").textContent = p ? (p.name || this._friendly(p)) : "Type"; // 0.1.7: banner-style header (name / "Keyboard Input")
         const ta = r.querySelector(".kb textarea"); ta.value = ""; this._kbText = "";
         r.querySelector(".kb").classList.add("show");
-        ta.focus(); // mobile WebKit only raises the keyboard if this runs inside the tap, which it does
+        ta.focus(); // some mobile browsers only raise the keyboard if this runs inside the tap, which it does
       }
       else if (act === "kb-clear") { const ta = r.querySelector(".kb textarea"); ta.value = ""; this._kbText = ""; this.sendText("", false); ta.focus(); }
       else if (act === "kb-send") {
