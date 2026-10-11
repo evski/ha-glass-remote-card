@@ -4,6 +4,21 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] - 2026-10-11
+
+### Added
+- **Shortcuts** (`players[].shortcuts`). Each player can have its own named service calls, such as an add-on search, a favourite list or a scene. They appear as the first section of that player's More (⋯) menu, above its usual items, and only while that player is active. No new buttons were added to the remote.
+  - **search** shortcuts open the typing sheet (same frosted panel, titled with your `prompt`, with Send reading *Search*). Nothing is sent while you type. On Search the call runs with your text filled in wherever the data says `{text}` / `{{ text }}`, or URL-encoded with `{text_url}` / `{{ text | urlencode }}` (handy for Kodi `plugin://` URLs). An empty search is not sent.
+  - **call** shortcuts run straight away.
+  - A shortcut is one `{service, data, target}` or a list under `actions:`. `input: false` skips input switching. Otherwise inputs with `triggers: [shortcut]` (or `any`) switch first.
+  - `icon` takes an `mdi:` icon or one of the card's icon names. Search shortcuts get a magnifier by default.
+  - The More button now also shows when a player has shortcuts but `more: false`.
+- New input trigger `shortcut`.
+- The README has a Kodi example (movie search, TV search and a list page in a video add-on), plus a screenshot.
+
+### Unchanged
+- Everything else, including the picker, typing, the keyboard banner and input switching.
+
 ## [0.1.13] - 2026-10-11
 
 First public release. Glass Remote Card is a frosted-glass touchpad remote for Home Assistant that follows whatever you're watching: Kodi, LG webOS, devices from the Apple TV integration, or any `media_player`. It has a touchpad, volume tabs, keyboard and dictation, a keyboard banner, sources, sound mode, a More menu, a CH control and input switching. It's a single file with no dependencies. Everything below was built and tested privately on the same day.

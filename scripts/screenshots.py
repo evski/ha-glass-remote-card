@@ -15,6 +15,8 @@ SHOTS = [  # name, query, viewport, safe-area (top, bottom), click
     ("channels", "?src=Apple%20TV&kodi=idle&atv=playing", (393, 852), (59, 34), "row:"),
     ("more-menu", "", (393, 852), (59, 34), ".more"),
     ("sound-mode-menu", "", (393, 852), (59, 34), "hold:.badge"),
+    ("shortcuts-menu", "", (393, 852), (59, 34), ".more"),  # 0.2.0: shortcuts section of the More menu
+    ("shortcuts-search", "", (393, 852), (59, 34), "seq:.more|.menu .mi.sc"),  # 0.2.0: a search shortcut's sheet
     ("remote-small-phone", "", (375, 667), (20, 0), None),
     ("card-layout", "?layout=card", (468, 690), (0, 0), None),
 ]
@@ -38,6 +40,10 @@ async def main():
                 await pg.locator("glass-remote-card").locator(".chl").first.click(); await pg.wait_for_timeout(400)
                 if click[4:]:
                     await pg.locator("glass-remote-card").locator(click[4:]).first.click(); await pg.wait_for_timeout(400)
+            elif click and click.startswith("seq:"):  # 0.2.0 (Grok Bot, 11 Oct 2026): several taps in order, then type
+                for q in click[4:].split("|"):
+                    await pg.locator("glass-remote-card").locator(q).first.click(); await pg.wait_for_timeout(400)
+                await pg.keyboard.type("dune"); await pg.wait_for_timeout(300)
             elif click:
                 await pg.locator("glass-remote-card").locator(click).first.click(); await pg.wait_for_timeout(400)
                 if click == ".kbd":

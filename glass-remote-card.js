@@ -52,11 +52,18 @@
  * Evan wanted the earlier styling kept. Only two 0.1.12 behaviour changes stay: the dark shade now ends just
  * below the last row (Exit remote) with a short fade instead of covering the whole page, and there is still no
  * close button (pill, outside tap or Escape close it). The slide-down animation is unchanged.
+ * 0.2.0 (Grok Bot, 11 Oct 2026): per-player shortcuts (`players[].shortcuts`). What: a list of named
+ * service calls shown as their own section at the top of the existing More (...) menu, only while that player
+ * is the one being controlled. A "search" shortcut first opens the typing sheet (same frosted panel, titled
+ * with its prompt, Send becomes Search) and puts what you typed into the call wherever the data says {text}
+ * ({text_url} / {{ text | urlencode }} = URL-encoded, for plugin URLs). A "call" shortcut runs straight away.
+ * Why: Evan wanted add-on searches and list shortcuts on the remote for Kodi, configurable rather than built
+ * in, and without new buttons on the remote. Nothing in the code knows about any particular add-on.
  */
 (() => {
   "use strict";
 
-  const VERSION = "0.1.13";
+  const VERSION = "0.2.0";
   const TAG = "glass-remote-card";
   const PICK_KEY = "glass-remote-card:pick:";
 
@@ -102,6 +109,8 @@
     auto: svg('<circle cx="12" cy="12" r="8.5"/><path d="M8.3 15.5 12 7.5l3.7 8M9.6 12.8h4.8"/>'),
     exit: svg('<path d="M14 4.5H6.5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2H14M10 12h10M16.5 8.5 20 12l-3.5 3.5"/>'),
     close: svg('<path d="M6 6l12 12M18 6 6 18"/>', 1.8),
+    // 0.2.0 (Grok Bot, 11 Oct 2026): default icon for search shortcuts in the More menu
+    search: svg('<circle cx="10.5" cy="10.5" r="6.2"/><path d="M15.2 15.2 20.5 20.5"/>', 1.7),
   };
 
   // CH control (0.1.4, Grok Bot 11 Oct 2026): each glyph holds the collapsed thin cap and the open
@@ -278,6 +287,7 @@
       if (p.keyboard_poll !== undefined && (typeof p.keyboard_poll !== "number" || p.keyboard_poll < 0))
         throw new Error(`glass-remote-card: players[${i}].keyboard_poll must be milliseconds (0 = off)`);
       if (p.channels !== undefined && typeof p.channels !== "boolean") throw new Error(`glass-remote-card: players[${i}].channels must be true or false`);
+      if (p.shortcuts !== undefined) p.shortcuts = normaliseShortcuts(p.shortcuts, i); // 0.2.0 (Grok Bot, 11 Oct 2026)
       return p;
     });
     const out = {
@@ -303,7 +313,8 @@
   // Input switching: put an AVR / soundbar / TV on the right input before a key is sent.
   // ---------------------------------------------------------------------------
   const INPUT_KEYS = ["home", "power", "select", "back", "play_pause", "up", "down", "left", "right",
-    "skip_back", "skip_fwd", "info", "subtitles", "channel_up", "channel_down", "volume_up", "volume_down", "mute", "text"];
+    "skip_back", "skip_fwd", "info", "subtitles", "channel_up", "channel_down", "volume_up", "volume_down", "mute", "text",
+    "shortcut"]; // 0.2.0 (Grok Bot, 11 Oct 2026): `shortcut` = before a More-menu shortcut runs
   const INPUT_DEFAULTS = { turn_on: false, turn_on_delay: 1500, triggers: ["home"], skip_if_selected: true, delay: 0, on_auto: false };
 
   function normaliseInputs(raw, i) {
@@ -452,6 +463,66 @@
     });
     return out;
   }
+  // ---------------------------------------------------------------------------
+  // Shortcuts (0.2.0, Grok Bot 11 Oct 2026). What: players[].shortcuts, a list of named service calls shown as a
+  // section of the More menu while that player is active. Why: one-tap add-on searches / lists on the remote,
+  // set in YAML so nothing add-on specific lives in the code.
+  //   - name: Search Movies           # required
+  //     icon: mdi:movie-search        # optional: an mdi: icon or one of the card's icon names
+  //     action: search                # search (ask for text first) | call (run now); default: search if the
+  //                                   # data uses {text}, else call
+  //     prompt: Search movies         # search: typing sheet title (placeholder: `placeholder`, default "Search")
+  //     service: kodi.call_method     # one call ({service, data, target}) or `actions: [ ... ]` for several
+  //     data: { ... "{text_url}" ... }
+  //     input: true                   # run this player's input switching (triggers: [shortcut] or [any]) first
+  // In any string of data/target: {text} or {{ text }} = what was typed, {text_url} or {{ text | urlencode }} =
+  // URL-encoded (for plugin:// URLs). A value of exactly "$text" is replaced too, like the `text` action.
+  // ---------------------------------------------------------------------------
+  const TEXT_RE = /\{\{\s*text\s*(\|\s*urlencode\s*)?\}\}|\{text(_url)?\}/g;
+  const usesText = (v) => typeof v === "string" ? v === "$text" || new RegExp(TEXT_RE.source).test(v)
+    : Array.isArray(v) ? v.some(usesText) : v && typeof v === "object" ? Object.values(v).some(usesText) : false;
+  function fillText(v, text) {
+    if (v === "$text") return text;
+    if (typeof v === "string") return v.replace(TEXT_RE, (m, j, u) => (j || u) ? encodeURIComponent(text) : text);
+    if (Array.isArray(v)) return v.map((x) => fillText(x, text));
+    if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, fillText(x, text)]));
+    return v;
+  }
+  function normaliseShortcuts(raw, i) {
+    if (raw === false || raw == null) return [];
+    if (!Array.isArray(raw)) throw new Error(`glass-remote-card: players[${i}].shortcuts must be a list`);
+    return raw.map((sc, j) => {
+      const where = `glass-remote-card: players[${i}].shortcuts[${j}]`;
+      if (!sc || typeof sc !== "object" || !sc.name) throw new Error(`${where} needs a name`);
+      // `action` is the shortcut kind (search | call); an HA-style "domain.service" there is taken as the service
+      let kind = sc.action, svc = sc.service;
+      if (typeof kind === "string" && kind.includes(".")) { svc = svc || kind; kind = undefined; }
+      const list = sc.actions || sc.sequence || (svc ? [{ service: svc, data: sc.data, target: sc.target }] : null);
+      if (!Array.isArray(list) || !list.length) throw new Error(`${where} needs a service (or a list under actions)`);
+      const steps = list.map((a, k) => {
+        const name = String((a && (a.service || a.action)) || "");
+        if (!/^[a-z0-9_]+\.[a-z0-9_]+$/i.test(name)) throw new Error(`${where}: "${name}" isn't a domain.service${list.length > 1 ? ` (actions[${k}])` : ""}`);
+        return { service: name, data: a.data || a.service_data || {}, target: a.target || {} };
+      });
+      const needsText = steps.some((st) => usesText(st.data) || usesText(st.target));
+      if (kind === undefined) kind = needsText ? "search" : "call";
+      if (kind !== "search" && kind !== "call") throw new Error(`${where}.action must be search or call`);
+      if (kind === "search" && !needsText) throw new Error(`${where} is a search but its data has no {text} placeholder`);
+      if (sc.input !== undefined && typeof sc.input !== "boolean") throw new Error(`${where}.input must be true or false`);
+      return { name: String(sc.name), icon: sc.icon || (kind === "search" ? "search" : null), kind,
+        prompt: sc.prompt ? String(sc.prompt) : null, placeholder: sc.placeholder ? String(sc.placeholder) : null,
+        input: sc.input !== false, steps };
+    });
+  }
+  /** Service-call steps for a shortcut, with the typed text put in ("" for call shortcuts). */
+  function shortcutSteps(sc, text = "") {
+    return sc.steps.map((a) => {
+      const [domain, service] = a.service.split(".");
+      return [domain, service, fillText({ ...a.data, ...a.target }, text)];
+    });
+  }
+  const shortcutsFor = (p) => (p && Array.isArray(p.shortcuts) ? p.shortcuts : []);
+
   const hasChannels = (p) => !!(p.channels === undefined ? PLATFORMS[p.platform].channels : p.channels) &&
     !!(PLATFORMS[p.platform].keys.channel_up || (p.actions && p.actions.channel_up));
 
@@ -683,6 +754,10 @@
     .menu .mi .ck { width: 16px; flex: 0 0 16px; font-weight: 600; }
     .menu .mi .nm { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .menu .mi .icon { opacity: .9; }
+    /* 0.2.0 (Grok Bot, 11 Oct 2026): shortcuts are the More menu's first section; a thicker gap separates
+       them from the player's own items. mdi: icons on shortcuts render with HA's ha-icon at the same size. */
+    .menu .mi.grp { border-top: 6px solid rgba(0,0,0,.24); }
+    .menu .mi .icon ha-icon { --mdc-icon-size: 20px; width: 20px; height: 20px; display: block; }
 
     .bottom { flex: 0 0 auto; margin-top: auto; padding-top: 28px; display: flex; align-items: center; justify-content: space-between; padding-left: 4px; padding-right: 4px; }
     .bottom .side { width: 82px; height: 82px; border-radius: 50%; display: grid; place-items: center; --s: 34px; }
@@ -952,6 +1027,32 @@
       // 0.1.8: no HA toast per keystroke; one glass hint, and close the sheet if the player says nothing is focused
       return this._call([...sw, ...steps], { quiet: true, onError: (e) => this._textError(p, e) });
     }
+    /** 0.2.0 (Grok Bot, 11 Oct 2026): run a shortcut of player p. Search shortcuts ask for text first (typing
+     *  sheet in search mode); call shortcuts run now. Input switching runs first unless the shortcut says input: false. */
+    runShortcut(p, sc, text) {
+      if (!p || !sc) return Promise.resolve();
+      if (sc.kind === "search" && text === undefined) { this._openSearch(p, sc); return Promise.resolve(); }
+      const sw = sc.input && !this._switching ? inputSteps(p, "shortcut", this._states, false) : [];
+      const steps = [...sw, ...shortcutSteps(sc, text || "")];
+      if (!sw.length) return this._call(steps);
+      this._switching = true;
+      return this._call(steps).finally(() => { this._switching = false; });
+    }
+    /** The typing sheet as a search box for shortcut sc: its prompt as the title, nothing sent while typing. */
+    _openSearch(p, sc) {
+      const r = this.shadowRoot;
+      this._kbSearch = { entity: p.entity, sc }; this._kbSheetFor = null;
+      this._kbLabels(sc.prompt || sc.name, this._friendly(p), sc.placeholder || "Search", "Search", "search");
+      const ta = r.querySelector(".kb textarea"); ta.value = ""; this._kbText = "";
+      r.querySelector(".kb").classList.add("show");
+      ta.focus(); // inside the menu tap, so mobile browsers raise the keyboard
+    }
+    _kbLabels(title, sub, placeholder, send, hint) {
+      const r = this.shadowRoot, ta = r.querySelector(".kb textarea");
+      r.querySelector(".kb-title").textContent = title; r.querySelector(".kb-sub").textContent = sub;
+      ta.placeholder = placeholder; ta.setAttribute("enterkeyhint", hint); ta.setAttribute("aria-label", send === "Search" ? "Search for" : "Text to send");
+      r.querySelector('[data-act="kb-send"]').textContent = send;
+    }
     _textError(p, e) {
       const msg = String((e && (e.message || e.error || e.code)) || "");
       if (NOT_FOCUSED.test(msg)) { this._closeKb(); this._toast(`No text field selected on ${this._friendly(p)}`); }
@@ -961,7 +1062,7 @@
     _focus(p) {
       return kbFocus(p, this._states, { polling: !!this._kbKey && this._kbEntity === (p && p.entity), open: this._kbOpen && this._kbEntity === (p && p.entity) });
     }
-    _closeKb() { const kb = this.shadowRoot && this.shadowRoot.querySelector(".kb"); if (kb) kb.classList.remove("show"); this._kbSheetFor = null; }
+    _closeKb() { const kb = this.shadowRoot && this.shadowRoot.querySelector(".kb"); if (kb) kb.classList.remove("show"); this._kbSheetFor = null; this._kbSearch = null; }
     /** A small glass hint; only one at a time, hides itself after `ms`. */
     _toast(text, ms = 2000) {
       const t = this.shadowRoot && this.shadowRoot.querySelector(".toast"); if (!t) return;
@@ -1060,6 +1161,7 @@
       const ta = r.querySelector(".kb textarea");
       ta.addEventListener("input", () => {
         this._kbText = ta.value;
+        if (this._kbSearch) return; // 0.2.0: a shortcut search sends nothing until Search
         const p = this.activePlayer;
         if (p && PLATFORMS[p.platform].textLive) this._debounce("kb", () => this.sendText(this._kbText, false), 250);
       });
@@ -1098,12 +1200,14 @@
         })) };
       }
       if (kind === "more") {
-        const items = moreItems(p, st);
-        if (!items.length) return null;
-        return { title: null, items: items.map((it) => ({
-          name: it.name, icon: it.icon,
+        // 0.2.0 (Grok Bot, 11 Oct 2026): this player's shortcuts first, then its own More items
+        const sc = shortcutsFor(p).map((s) => ({ name: s.name, icon: s.icon, shortcut: true, run: () => this.runShortcut(p, s) }));
+        const items = moreItems(p, st).map((it, i) => ({
+          name: it.name, icon: it.icon, grp: i === 0 && sc.length > 0,
           run: it.open ? () => this._openMenu(it.open, this.shadowRoot.querySelector(".more")) : () => this._call(it.steps),
-        })) };
+        }));
+        if (!sc.length && !items.length) return null;
+        return { title: null, items: [...sc, ...items] };
       }
       return null;
     }
@@ -1113,7 +1217,7 @@
       const r = this.shadowRoot, bg = r.querySelector(".menu-bg"), menu = r.querySelector(".menu");
       const hasTick = model.items.some((i) => i.sel !== undefined);
       menu.innerHTML = (model.title ? `<div class="mt">${esc(model.title)}</div>` : "") + model.items.map((it, i) =>
-        `<button class="mi" role="menuitem" data-i="${i}">${hasTick ? `<span class="ck">${it.sel ? "\u2713" : ""}</span>` : ""}<span class="nm">${esc(it.name)}</span>${it.icon && ICONS[it.icon] ? icon(it.icon) : ""}</button>`).join("");
+        `<button class="mi${it.grp ? " grp" : ""}${it.shortcut ? " sc" : ""}" role="menuitem" data-i="${i}">${hasTick ? `<span class="ck">${it.sel ? "\u2713" : ""}</span>` : ""}<span class="nm">${esc(it.name)}</span>${this._menuIcon(it.icon)}</button>`).join("");
       menu.querySelectorAll(".mi").forEach((b) => b.addEventListener("click", (e) => {
         e.stopPropagation();
         const it = this._menu && this._menu.items[+b.dataset.i]; if (!it) return;
@@ -1138,6 +1242,13 @@
       const sel = menu.querySelector(".ck:not(:empty)");
       if (sel && sel.parentElement.scrollIntoView) try { sel.parentElement.scrollIntoView({ block: "center" }); } catch (_) { /* jsdom */ }
       requestAnimationFrame(() => menu.classList.add("in"));
+    }
+    /** Menu row icon: one of the card's icons, or (0.2.0, Grok Bot 11 Oct 2026) an mdi: icon via HA's ha-icon. */
+    _menuIcon(ic) {
+      if (!ic) return "";
+      if (ICONS[ic]) return icon(ic);
+      if (/^mdi:/.test(ic) && customElements.get("ha-icon")) return `<span class="icon"><ha-icon icon="${esc(ic)}"></ha-icon></span>`;
+      return "";
     }
     _closeMenu() {
       const r = this.shadowRoot; r.querySelector(".menu-bg").classList.remove("show"); r.querySelector(".menu").classList.remove("in");
@@ -1230,12 +1341,21 @@
         // 0.1.8: only while a text field is focused, when the player can tell us (keyboard_sensor, Kodi poll)
         if (this._focus(p) === false) { this._toast(`No text field selected on ${this._friendly(p)}`); return; }
         this._kbSheetFor = p ? p.entity : null;
-        r.querySelector(".kb-title").textContent = p ? (p.name || this._friendly(p)) : "Type"; // 0.1.7: banner-style header (name / "Keyboard Input")
+        this._kbSearch = null; // 0.2.0: back from search mode to normal typing labels
+        this._kbLabels(p ? (p.name || this._friendly(p)) : "Type", "Keyboard Input", "Type or dictate", "Send", "send"); // 0.1.7: banner-style header (name / "Keyboard Input")
         const ta = r.querySelector(".kb textarea"); ta.value = ""; this._kbText = "";
         r.querySelector(".kb").classList.add("show");
         ta.focus(); // some mobile browsers only raise the keyboard if this runs inside the tap, which it does
       }
-      else if (act === "kb-clear") { const ta = r.querySelector(".kb textarea"); ta.value = ""; this._kbText = ""; this.sendText("", false); ta.focus(); }
+      else if (act === "kb-clear") { const ta = r.querySelector(".kb textarea"); ta.value = ""; this._kbText = ""; if (!this._kbSearch) this.sendText("", false); ta.focus(); }
+      else if (act === "kb-send" && this._kbSearch) { // 0.2.0 (Grok Bot, 11 Oct 2026): run the search shortcut with the typed text
+        const text = this._kbText.trim();
+        if (!text) { this._toast("Type something to search for"); r.querySelector(".kb textarea").focus(); return; }
+        const { entity, sc } = this._kbSearch;
+        const p = this._config.players.find((x) => x.entity === entity);
+        this._closeSheets();
+        this.runShortcut(p, sc, text);
+      }
       else if (act === "kb-send") {
         const p = this.activePlayer;
         clearTimeout(this._db_kb); // no stale live update after Enter
@@ -1279,7 +1399,7 @@
     }
     _closeSheets() {
       const r = this.shadowRoot;
-      r.querySelectorAll(".sheet-bg, .dd-bg").forEach((s) => s.classList.remove("show")); this._kbSheetFor = null;
+      r.querySelectorAll(".sheet-bg, .dd-bg").forEach((s) => s.classList.remove("show")); this._kbSheetFor = null; this._kbSearch = null;
       const pill = r.querySelector(".pill"); if (pill) { pill.classList.remove("open"); pill.setAttribute("aria-expanded", "false"); }
       const top = r.querySelector(".top"); if (top) top.classList.remove("dd-open"); // 0.1.11
     }
@@ -1372,7 +1492,7 @@
       r.querySelector(".kbd").style.display = textable ? "" : "none";
       // bottom row: sources | -10 | ... | +10 | CH (each slot keeps its place when hidden)
       r.querySelector(".src").classList.toggle("gone", !sourceMenu(p, this._states));
-      r.querySelector(".more").classList.toggle("gone", !moreItems(p, this._states).length);
+      r.querySelector(".more").classList.toggle("gone", !moreItems(p, this._states).length && !shortcutsFor(p).length); // 0.2.0: shortcuts alone keep it
       const chOk = hasChannels(p);
       r.querySelector(".ch").classList.toggle("gone", !chOk);
       if (!chOk && this._chOpen) this._setChOpen(false);
@@ -1387,7 +1507,7 @@
 
   // Exposed for tests and power users.
   GlassRemoteCard.VERSION = VERSION;
-  GlassRemoteCard.helpers = { kbFocus, kbPollInterval, kodiKeyboardFromEvent, sourceMenu, soundModeMenu, optionSteps, moreItems, hasChannels, bannerText, normaliseConfig, inputSteps, choosePlayer, volumeTarget, nowPlaying, stepsFor, swipeDirection, guessPlatform, PLATFORMS, ICONS };
+  GlassRemoteCard.helpers = { kbFocus, kbPollInterval, kodiKeyboardFromEvent, sourceMenu, soundModeMenu, optionSteps, moreItems, hasChannels, bannerText, normaliseShortcuts, shortcutSteps, fillText, normaliseConfig, inputSteps, choosePlayer, volumeTarget, nowPlaying, stepsFor, swipeDirection, guessPlatform, PLATFORMS, ICONS };
 
   if (!customElements.get(TAG)) customElements.define(TAG, GlassRemoteCard);
   window.customCards = window.customCards || [];

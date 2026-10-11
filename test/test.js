@@ -738,6 +738,107 @@ function ptr(w, el, type, x = 100, y = 100) {
     w.localStorage.clear();
   }
 
+  // ---------------------------------------------------------------------------
+  // Shortcuts (0.2.0, Grok Bot 11 Oct 2026): players[].shortcuts as a section of the More menu
+  // ---------------------------------------------------------------------------
+  {
+    const H = C.helpers;
+    const SC = () => [
+      { name: "Search Films", icon: "mdi:magnify", prompt: "Search films", service: "kodi.call_method",
+        data: { entity_id: "media_player.kodi", method: "GUI.ActivateWindow", window: "videos", parameters: ["plugin://plugin.video.example/?action=search&q={text_url}", "return"] } },
+      { name: "Say", action: "search", service: "notify.tv", data: { message: "{{ text }} / {text} / {{ text | urlencode }}", title: "$text" } },
+      { name: "My List", action: "call", service: "kodi.call_method", data: { entity_id: "media_player.kodi", method: "GUI.ActivateWindow", window: "videos", parameters: ["plugin://plugin.video.example/?action=list", "return"] } },
+      { name: "Two steps", actions: [{ service: "script.turn_on", target: { entity_id: "script.a" } }, { action: "light.turn_off", target: { entity_id: "light.b" } }] },
+    ];
+    const n = H.normaliseShortcuts(SC(), 0);
+    check("SC1 kinds: {text} data -> search (default), explicit search/call kept, no placeholder -> call",
+      eq(n.map((x) => x.kind), ["search", "search", "call", "call"]));
+    check("SC2 default icon: search shortcuts get the card's search icon, call shortcuts none; mdi: icon kept",
+      n[0].icon === "mdi:magnify" && n[1].icon === "search" && n[2].icon === null && !!H.ICONS.search);
+    const s0 = H.shortcutSteps(n[0], "the matrix & co");
+    check("SC3 {text_url} URL-encodes the typed text inside a plugin URL",
+      s0[0][0] === "kodi" && s0[0][1] === "call_method" && s0[0][2].parameters[0] === "plugin://plugin.video.example/?action=search&q=the%20matrix%20%26%20co" && s0[0][2].parameters[1] === "return");
+    const s1 = H.shortcutSteps(n[1], "a b");
+    check("SC4 {{ text }}, {text}, {{ text | urlencode }} and $text all substituted", s1[0][2].message === "a b / a b / a%20b" && s1[0][2].title === "a b", s1);
+    const s3 = H.shortcutSteps(n[3]);
+    check("SC5 actions list: several calls, target merged, HA-style action: key accepted",
+      eq(s3, [["script", "turn_on", { entity_id: "script.a" }], ["light", "turn_off", { entity_id: "light.b" }]]));
+    const bad = (sc) => { try { H.normaliseShortcuts([sc], 0); return false; } catch (e) { return true; } };
+    check("SC6 validation: no name, no service, bad service, search without {text}, bad action, not a list",
+      bad({ service: "a.b" }) && bad({ name: "x" }) && bad({ name: "x", service: "nodot" }) && bad({ name: "x", action: "search", service: "a.b", data: {} }) &&
+      bad({ name: "x", action: "jump", service: "a.b" }) && (() => { try { H.normaliseConfig({ players: [{ entity: "media_player.kodi", shortcuts: {} }] }); return false; } catch (e) { return true; } })());
+    check("SC7 shortcuts: false / absent -> no shortcuts; config normalises them per player",
+      eq(H.normaliseShortcuts(false, 0), []) && H.normaliseConfig({ players: [{ entity: "media_player.kodi", shortcuts: SC() }] }).players[0].shortcuts.length === 4);
+
+    // UI: in the More menu, first section, only for the active player
+    w.localStorage.clear();
+    const cfg = CONFIG(); cfg.players[1].shortcuts = SC();
+    cfg.players[1].input = [{ entity: "media_player.avr", source: "UHD", triggers: ["shortcut"] }];
+    let f = mount(w, cfg, states({ "media_player.avr": { attributes: { source: "PVR" } } }));
+    check("SC8 Kodi active (has shortcuts): no new buttons in the card, More shown",
+      f.card.activeEntity === "media_player.kodi" && !f.card.shadowRoot.querySelector(".shortcuts, .chips, [data-act^='shortcut']") && !f.$(".more").classList.contains("gone"));
+    f.$(".more").click(); await sleep(10);
+    let rows = [...f.card.shadowRoot.querySelectorAll(".menu .mi")];
+    check("SC9 More menu: shortcuts first (in order), then the player's own items after a section gap",
+      eq(rows.slice(0, 4).map((b) => b.querySelector(".nm").textContent), ["Search Films", "Say", "My List", "Two steps"]) &&
+      rows.slice(0, 4).every((b) => b.classList.contains("sc")) && rows[4] && rows[4].classList.contains("grp") && rows[4].querySelector(".nm").textContent === "Info" &&
+      rows.filter((b) => b.classList.contains("grp")).length === 1);
+    check("SC10 search shortcut shows the search icon; call shortcut has none; mdi without ha-icon -> no broken icon",
+      !!rows[1].querySelector(".icon svg") && !rows[2].querySelector(".icon") && !rows[0].querySelector(".icon"));
+    // call shortcut runs at once (input switch first)
+    f.hass.calls.length = 0;
+    rows[2].click(); await sleep(30);
+    check("SC11 call shortcut: menu closes, input switch (triggers: [shortcut]) then the call; no sheet",
+      !f.$(".menu-bg").classList.contains("show") && !f.$(".kb").classList.contains("show") &&
+      eq(f.hass.calls.map((c) => c[0] + "." + c[1]), ["media_player.select_source", "kodi.call_method"]) && f.hass.calls[1][2].parameters[0].endsWith("action=list"), f.hass.calls);
+    // search shortcut opens the typing sheet in search mode
+    f.hass.calls.length = 0;
+    f.$(".more").click(); await sleep(10);
+    f.card.shadowRoot.querySelectorAll(".menu .mi")[0].click(); await sleep(10);
+    const ta = f.$(".kb textarea");
+    check("SC12 search shortcut: frosted typing sheet opens titled with the prompt, Send reads Search, nothing sent yet",
+      f.$(".kb").classList.contains("show") && f.$(".kb-title").textContent === "Search films" && f.$(".kb-sub").textContent === "Kodi" &&
+      f.$('[data-act="kb-send"]').textContent === "Search" && ta.placeholder === "Search" && ta.getAttribute("enterkeyhint") === "search" && f.hass.calls.length === 0);
+    ta.value = "dune"; ta.dispatchEvent(new w.Event("input")); await sleep(300);
+    check("SC13 typing in search mode sends nothing live to Kodi", f.hass.calls.length === 0, f.hass.calls);
+    f.$('[data-act="kb-send"]').click(); await sleep(10);
+    check("SC14 empty-text guard not hit; Search runs input switch + call with the URL-encoded text, sheet closes",
+      !f.$(".kb").classList.contains("show") && eq(f.hass.calls.map((c) => c[0] + "." + c[1]), ["media_player.select_source", "kodi.call_method"]) &&
+      f.hass.calls[1][2].parameters[0] === "plugin://plugin.video.example/?action=search&q=dune", f.hass.calls);
+    f.hass.calls.length = 0;
+    f.$(".more").click(); await sleep(10);
+    f.card.shadowRoot.querySelectorAll(".menu .mi")[0].click(); await sleep(10);
+    ta.value = "   "; ta.dispatchEvent(new w.Event("input"));
+    ta.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Enter", bubbles: true })); await sleep(10);
+    check("SC15 Enter with blank text: nothing sent, sheet stays open, glass hint shown",
+      f.hass.calls.length === 0 && f.$(".kb").classList.contains("show") && /search/i.test(f.$(".toast").textContent));
+    f.$('[data-act="kb-clear"]').click(); await sleep(10);
+    check("SC16 Clear in search mode doesn't send an empty text to the player", f.hass.calls.length === 0);
+    f.$('[data-act="close"]').click();
+    // normal keyboard afterwards has its normal labels back
+    f.$(".kbd").click(); await sleep(10);
+    check("SC17 keyboard button after a search: labels back to Keyboard Input / Send / Type or dictate",
+      f.$(".kb-sub").textContent === "Keyboard Input" && f.$('[data-act="kb-send"]').textContent === "Send" && ta.placeholder === "Type or dictate" && ta.getAttribute("enterkeyhint") === "send");
+    f.$('[data-act="close"]').click();
+    // another player active -> its own More menu, no shortcuts section
+    f.card.remove(); w.localStorage.clear();
+    f = mount(w, cfg, states({ "media_player.kodi": { state: "idle" }, "media_player.lr_tv": { attributes: { source: "Apple TV" } } }));
+    f.$(".more").click(); await sleep(10);
+    rows = [...f.card.shadowRoot.querySelectorAll(".menu .mi")];
+    check("SC18 shortcuts only while that player is active (Apple TV active -> none, no section gap)",
+      f.card.activeEntity === "media_player.lr_appletv" && rows.length > 0 && !rows.some((b) => b.classList.contains("sc") || b.classList.contains("grp")));
+    f.card.remove(); w.localStorage.clear();
+    // more: false + shortcuts -> More button still shown with only the shortcuts
+    const cfg2 = { players: [{ entity: "media_player.kodi", platform: "kodi", more: false, shortcuts: [SC()[2]] }] };
+    f = mount(w, cfg2, states());
+    f.$(".more").click(); await sleep(10);
+    rows = [...f.card.shadowRoot.querySelectorAll(".menu .mi")];
+    check("SC19 more: false but shortcuts set -> More button shown with just the shortcuts",
+      !f.$(".more").classList.contains("gone") && rows.length === 1 && rows[0].querySelector(".nm").textContent === "My List" && !rows[0].classList.contains("grp"));
+    f.card.remove(); w.localStorage.clear();
+    check("SC20 no add-on names in the card code (shortcuts are generic)", !/umbrella|trakt/i.test(SRC_NOW()));
+  }
+
   // URL pick (Sidebar Mini Player remote_path: /remote?player={entity})
   w.localStorage.clear();
   w.history.pushState(null, "", "/remote?player=media_player.bed_appletv");

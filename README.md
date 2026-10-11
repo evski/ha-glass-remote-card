@@ -38,6 +38,7 @@ One card drives Kodi, LG webOS TVs, devices from Home Assistant's Apple TV integ
   - A bottom row inside the pad: **sources list | -10 | ⋯ more | +10 | CH**. Tap **CH** to open the channel stack (up chevron, CH, down chevron). Tap CH again to close it, or it closes by itself after 5 s. CH only shows on devices with channel keys.
   - **Sources** opens a glass picker with the player's sources, or those of your receiver or TV. The current source is ticked.
   - **More (⋯)** holds info, subtitles, sound mode and each platform's extras.
+  - **Shortcuts** you define per player (an add-on search, a favourite list, a scene) appear as the first section of the More menu while that player is active. Search shortcuts ask for text in the typing sheet first. See [Shortcuts](#shortcuts).
   - Play/pause, a big Back button and Home underneath. Long-press Back for the top menu and Home for the platform's extra action.
 - **Volume tabs on the pad's edge.** Holding a tab repeats. Press and hold the speaker badge between the tabs to pick the receiver's **sound mode**. Volume can go to a receiver, with a fallback when the receiver is off, or through the player's `remote` entity (HDMI-CEC/IR).
 - **Keyboard and dictation.**
@@ -163,6 +164,7 @@ source_map:                               # optional: follow the TV's input
 | `sources` | The sources picker (list button). See [Sources, sound mode, More and CH](#sources-sound-mode-more-and-ch). |
 | `sound_mode` | The sound mode menu (hold the speaker badge, or ⋯ → Sound Mode). |
 | `more` | Items in the ⋯ menu, or `false` to hide it. |
+| `shortcuts` | Your own service calls, shown as the first section of the ⋯ menu while this player is active. A search shortcut asks for text first. See [Shortcuts](#shortcuts). |
 | `channels` | Show the CH up/down control. |
 | `keyboard_poll` | Kodi: how often (ms) to check whether Kodi's on-screen keyboard is open. Default `2000`; `0` turns it off. Also settable on the card. See [Kodi keyboard detection](#kodi-keyboard-detection). |
 | `keyboard_poll_during_video` | Kodi: keep checking while a video plays. Default `false`. |
@@ -259,6 +261,68 @@ Set `more: false` to hide the button.
         target: { entity_id: scene.movie_time }
 ```
 
+### Shortcuts
+
+Shortcuts are your own service calls for one player, such as a search inside a Kodi add-on, a favourite list, or a scene. They appear as the first section of that player's ⋯ menu, above its usual items, and only while that player is the one the remote controls. There are no extra buttons on the remote. If a player has shortcuts but `more: false`, the ⋯ button still shows, with just the shortcuts.
+
+There are two kinds:
+- **search** opens the typing sheet, titled with your `prompt`, and the Send button reads *Search*. Nothing is sent while you type. Tap Search (or Enter) and the card makes the call with your text in it.
+- **call** runs straight away.
+
+| Key | Description |
+|---|---|
+| `name` | **Required.** The menu label. |
+| `icon` | Optional. An `mdi:` icon or one of the card's icon names. Search shortcuts default to a magnifier. |
+| `action` | `search` or `call`. If you leave it out, it's `search` when the data contains a text placeholder and `call` otherwise. |
+| `prompt` | Search: the sheet's title (defaults to `name`). `placeholder` sets the hint inside the box (default *Search*). |
+| `service`, `data`, `target` | The call to make. For several calls in a row, use `actions:` with a list of `{service, data, target}`. |
+| `input` | Run this player's [input switching](#input-switching) first (inputs with `triggers: [shortcut]` or `[any]`). Default `true`. |
+
+Text placeholders work in any string inside `data` or `target`:
+- `{text}` or `{{ text }}` is what you typed.
+- `{text_url}` or `{{ text | urlencode }}` is the same text URL-encoded, for `plugin://` URLs.
+- A value of exactly `$text` is replaced too, as in the `text` action.
+
+The card fills these in itself, so they work with any service, not only template-aware ones.
+
+**Example (Kodi add-on):** these shortcuts open a video add-on's movie search, TV search and a list page in Kodi through `kodi.call_method` with `GUI.ActivateWindow`. They use the Umbrella add-on's plugin URLs only as an example. Any add-on that takes `plugin://` URLs works the same way; check the add-on's own docs or source for its action names.
+
+```yaml
+  - entity: media_player.kodi
+    platform: kodi
+    shortcuts:
+      - name: Search Movies
+        icon: mdi:movie-search
+        prompt: Search movies
+        service: kodi.call_method
+        data:
+          entity_id: media_player.kodi
+          method: GUI.ActivateWindow
+          window: videos
+          parameters: ["plugin://plugin.video.umbrella/?action=movieSearchterm&name={text_url}", "return"]
+      - name: Search TV
+        icon: mdi:television-classic
+        prompt: Search TV shows
+        service: kodi.call_method
+        data:
+          entity_id: media_player.kodi
+          method: GUI.ActivateWindow
+          window: videos
+          parameters: ["plugin://plugin.video.umbrella/?action=tvSearchterm&name={text_url}", "return"]
+      - name: Trakt Progress
+        icon: mdi:progress-check
+        service: kodi.call_method
+        data:
+          entity_id: media_player.kodi
+          method: GUI.ActivateWindow
+          window: videos
+          parameters: ["plugin://plugin.video.umbrella/?action=shows_progress&url=progresstv", "return"]
+```
+
+A shortcut can also run a script that does more work, for example `service: script.turn_on` with `target: { entity_id: script.movie_night }`, or `service: script.search_something` with `data: { variables: { term: "{text}" } }`.
+
+![More menu with shortcuts](docs/images/shortcuts-menu.png)
+
 ### CH (channel up/down)
 
 This is shown for `apple_tv` (pyatv `channel_up`/`channel_down`, for live-TV apps) and `webostv` (`CHANNELUP`/`CHANNELDOWN`). Set `channels: true` to add it for Kodi PVR (or for `generic` with a `remote`), and `channels: false` to remove it. Override the keys with `actions.channel_up` / `actions.channel_down`.
@@ -300,7 +364,7 @@ Say Kodi plays through the receiver's `UHD` input, and the receiver is still on 
 |---|---|---|
 | `entity` | **required** | The `media_player` whose input is switched: an AV receiver, soundbar or TV. |
 | `source` | **required** unless `action` is set | Source name to select. It must match the entity's `source_list` exactly. |
-| `triggers` | `[home]` | Which buttons switch the input first. You can use any key name (`home`, `power`, `select`, `back`, `play_pause`, `up`, `down`, `left`, `right`, `skip_back`, `skip_fwd`, `info`, `subtitles`, `volume_up`, `volume_down`, `mute`, `text`). `any` means every button. `first` means the first button pressed after the card starts controlling this player. `pick` means when you pick this player in the picker (or open the card with `?player=`). Long presses (`home_hold`) count as their button. |
+| `triggers` | `[home]` | Which buttons switch the input first. You can use any key name (`home`, `power`, `select`, `back`, `play_pause`, `up`, `down`, `left`, `right`, `skip_back`, `skip_fwd`, `info`, `subtitles`, `volume_up`, `volume_down`, `mute`, `text`). `shortcut` means before a [shortcut](#shortcuts) runs. `any` means every button. `first` means the first button pressed after the card starts controlling this player. `pick` means when you pick this player in the picker (or open the card with `?player=`). Long presses (`home_hold`) count as their button. |
 | `skip_if_selected` | `true` | Do nothing if the entity is already on `source`. Set `false` to send the switch every time. |
 | `turn_on` | `false` | If the entity is off or in standby, turn it on first. When this is `false` and the entity is off, the switch is skipped, because selecting a source on an off receiver does nothing. |
 | `turn_on_delay` | `1500` | Milliseconds to wait after `turn_on` before selecting the source. Receivers often ignore commands while they boot. |
