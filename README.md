@@ -38,7 +38,8 @@ One card drives your Apple TVs, Kodi, LG webOS TVs and any other `media_player`:
   - Play/pause, a big Back button and Home underneath. Long-press Back for the top menu and Home for the platform's extra action.
 - **Volume tabs on the pad's edge, like the Remote app.** Holding a tab repeats. Press and hold the speaker badge between the tabs to pick the receiver's **sound mode**. Volume can go to a receiver, with a fallback when the receiver is off, or through the Apple TV remote (HDMI-CEC/IR).
 - **Keyboard and dictation.**
-  - The keyboard button opens a text box (a separate mic button is available with `show_mic: true`).
+  - The keyboard button opens a text box (a separate mic button is available with `show_mic: true`). When the player can report keyboard focus (an Apple TV `keyboard_sensor`, or Kodi's keyboard window seen by the poll), the text box only opens while a text field is selected. Otherwise a small glass hint says "No text field selected", and the box closes by itself when the field goes away. Players that can't report focus, like LG webOS, always open it.
+  - If a text call fails, the card shows one glass hint instead of a stack of Home Assistant error toasts.
   - On iPhone, tap the keyboard's mic key to dictate.
   - Text goes live to an Apple TV, LG or Kodi. Kodi gets `Input.SendText` with `done: false` while you type and `done: true` on Enter, so it lands in an add-on's search box.
 - **Keyboard notification.** When the Apple TV's keyboard-focus sensor turns on, an iOS-style banner slides down: "*Living Room Keyboard* / *Keyboard Input* / Enter text on your Apple TV using your iOS keyboard. Press to type." Tap it to type.

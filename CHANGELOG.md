@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.8] - unreleased
+
+### Changed
+- Every overlay now uses the same Liquid Glass panel as the typing sheet and keyboard banner: the device picker, the sources list, the sound mode menu and the More menu.
+- The device picker's header matches the typing sheet, with the title and a thin close icon in a glass circle. The selected row gets a soft glass highlight and a white tick instead of accent-coloured text.
+
+### Fixed
+- The keyboard button no longer opens the typing sheet when nothing on the TV is asking for text. Previously every keystroke made Home Assistant show "No text input field is currently focused on the Apple TV", and those toasts piled up. When the player can report keyboard focus (an Apple TV `keyboard_sensor`, or Kodi's keyboard window seen by the poll), the sheet only opens while a text field is focused; otherwise a small glass hint says "No text field selected on <player>" for about 2 seconds. The sheet closes if focus drops while it's open. Players that can't report focus (LG webOS, or Kodi while video plays) behave as before.
+- Text service calls now turn off Home Assistant's own error toast. A failure shows a single glass hint instead.
+
 ## [0.1.7] - unreleased
 
 ### Changed

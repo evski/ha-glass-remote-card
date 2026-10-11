@@ -15,11 +15,18 @@
  * 0.1.7 (Grok Bot, 11 Oct 2026): the typing sheet (keyboard button) now matches the Liquid Glass look and
  * the keyboard banner: same frosted glass panel and app-icon header, thin close icon in a glass circle,
  * glass pill Clear/Send buttons (no accent-coloured text links), shorter placeholder, no hint line.
+ * 0.1.8 (Grok Bot, 11 Oct 2026): every sheet and menu (device picker, sources, sound mode, More) uses that
+ * same glass panel (PANEL): picker header like the typing sheet, thin close in a glass circle, white ticks
+ * and a soft glass highlight for the selected row instead of accent-coloured text.
+ * 0.1.8 keyboard focus: when the player can tell us a text field is focused (a keyboard_sensor such as the
+ * Apple TV's, or Kodi's keyboard window seen by the poll), the keyboard button only opens the typing sheet
+ * while a field is focused; otherwise it shows a short glass hint. The sheet closes when focus drops.
+ * Text service calls are made with HA's error toast turned off; a failure shows one glass hint instead.
  */
 (() => {
   "use strict";
 
-  const VERSION = "0.1.7";
+  const VERSION = "0.1.8";
   const TAG = "glass-remote-card";
   const PICK_KEY = "glass-remote-card:pick:";
 
@@ -85,6 +92,17 @@
     const where = { apple_tv: "your Apple TV", kodi: "Kodi", webostv: "your LG TV" }[p.platform] || name;
     return { title: `${name} Keyboard`, line2: "Keyboard Input", body: `Enter text on ${where} using your ${kb}. Press to type.` };
   }
+
+  /** Keyboard focus, 0.1.8 (Grok Bot, 11 Oct 2026): true/false when the player can report whether a text
+   *  field is focused (a keyboard_sensor, or Kodi's keyboard window seen by the poll); null when it can't
+   *  (e.g. LG webOS), so the keyboard button keeps working as before. `kodi` = { polling, open }. */
+  function kbFocus(p, st, kodi) {
+    if (!p) return null;
+    if (p.keyboard_sensor) { const s = st[p.keyboard_sensor]; return !!(s && s.state === "on"); }
+    if (p.platform === "kodi" && kodi && kodi.polling) return !!kodi.open;
+    return null;
+  }
+  const NOT_FOCUSED = /not? .*focus|no text input/i;
 
   const OFF_STATES = ["off", "unavailable", "unknown", "standby"];
   const RANK = { playing: 3, paused: 2, on: 1, idle: 1, buffering: 1 };
@@ -535,6 +553,13 @@
     box-shadow: inset 0 1px 0 rgba(255,255,255,.22), inset 0 -1px 1px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.6), 0 1px 2px rgba(0,0,0,.5);
     -webkit-backdrop-filter: blur(24px) saturate(150%); backdrop-filter: blur(24px) saturate(150%);`;
 
+  // 0.1.8 (Grok Bot, 11 Oct 2026): one frosted panel for the keyboard banner, the typing sheet, the device
+  // picker and the pop-up menus, so every overlay looks the same.
+  const PANEL = `
+    color: #fff; background: rgba(58,58,62,.72); border: 1px solid rgba(255,255,255,.10);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 18px 48px rgba(0,0,0,.6);
+    -webkit-backdrop-filter: blur(30px) saturate(180%); backdrop-filter: blur(30px) saturate(180%);`;
+
   const CSS = `
     :host { display: block; color: rgba(255,255,255,.95); font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", var(--paper-font-body1_-_font-family, Roboto), sans-serif; --grc-fg: rgba(255,255,255,.95); --grc-dim: rgba(255,255,255,.55);
       --grc-pad: #1c1c1e; --grc-bg: #000; --grc-accent: var(--primary-color, #0a84ff); }
@@ -612,12 +637,10 @@
     .menu-bg { position: fixed; inset: 0; z-index: 30; display: none; }
     .menu-bg.show { display: block; }
     .menu { position: fixed; width: min(270px, calc(100vw - 20px)); max-height: 56vh; overflow-y: auto; overscroll-behavior: contain;
-      border-radius: 22px; padding: 6px 0; color: #fff; background: rgba(44,44,48,.80); border: 1px solid rgba(255,255,255,.10);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 18px 48px rgba(0,0,0,.6);
-      -webkit-backdrop-filter: blur(30px) saturate(180%); backdrop-filter: blur(30px) saturate(180%);
+      border-radius: 22px; padding: 6px 0; ${PANEL}
       transform: scale(.85); opacity: 0; transition: transform .22s cubic-bezier(.2,.9,.3,1.15), opacity .15s; }
     .menu-bg.show .menu.in { transform: none; opacity: 1; }
-    .menu .mt { padding: 8px 16px 6px; font-size: 13px; color: rgba(235,235,245,.6); }
+    .menu .mt { padding: 8px 16px 6px; font-size: 13px; font-weight: 600; color: rgba(235,235,245,.6); }
     .menu .mi { width: 100%; display: flex; align-items: center; gap: 10px; padding: 11px 16px; font-size: 16px; text-align: left; --s: 20px;
       border-top: .5px solid rgba(255,255,255,.08); }
     .menu .mt + .mi, .menu .mi:first-child { border-top: none; }
@@ -630,13 +653,17 @@
     .bottom .side { width: 82px; height: 82px; border-radius: 50%; display: grid; place-items: center; --s: 34px; }
     .bottom .big { width: 106px; height: 106px; border-radius: 50%; display: grid; place-items: center; --s: 44px; }
 
+    /* glass hint, 0.1.8 (Grok Bot, 11 Oct 2026): one small toast in the card's own glass, replaces HA's grey toasts for text errors */
+    .toast { position: fixed; z-index: 40; left: 50%; top: 42%; width: max-content; max-width: calc(100vw - 72px);
+      padding: 12px 18px; border-radius: 20px; font-size: 15px; font-weight: 500; line-height: 1.3; text-align: center; pointer-events: none; ${PANEL}
+      opacity: 0; transform: translate(-50%, -50%) scale(.92); transition: opacity .2s ease, transform .25s cubic-bezier(.2,.9,.3,1.15); }
+    .toast.show { opacity: 1; transform: translate(-50%, -50%); }
+    .root.card ~ .toast { position: absolute; }
+
     /* "wants text": an iOS-style notification banner that slides down over the top row */
     .wants { position: absolute; z-index: 6; left: calc(10px + env(safe-area-inset-left, 0px)); right: calc(10px + env(safe-area-inset-right, 0px));
       top: calc(max(env(safe-area-inset-top, 0px), 8px) + 2px); display: flex; align-items: center; gap: 12px; text-align: left;
-      padding: 12px 16px 12px 12px; border-radius: 24px; color: #fff;
-      background: rgba(58,58,62,.72); border: 1px solid rgba(255,255,255,.10);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 12px 32px rgba(0,0,0,.55);
-      -webkit-backdrop-filter: blur(30px) saturate(180%); backdrop-filter: blur(30px) saturate(180%);
+      padding: 12px 16px 12px 12px; border-radius: 24px; ${PANEL}
       transform: translateY(calc(-100% - 80px)); opacity: 0; visibility: hidden;
       transition: transform .45s cubic-bezier(.2,.9,.25,1.12), opacity .25s ease, visibility 0s linear .45s; }
     .wants.show { transform: none; opacity: 1; visibility: visible; transition: transform .45s cubic-bezier(.2,.9,.25,1.12), opacity .2s ease; }
@@ -653,20 +680,17 @@
     .sheet-bg { position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,.55); display: none; align-items: flex-end; justify-content: center;
       -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
     .sheet-bg.show { display: flex; }
-    .sheet { width: min(520px, 100%); margin: 0 8px calc(max(env(safe-area-inset-bottom, 0px), 8px) + 8px); border-radius: 28px; padding: 10px;
-      background: rgba(28,28,30,.92); border: 1px solid rgba(255,255,255,.08); box-shadow: 0 20px 60px rgba(0,0,0,.7); }
-    .sheet h3 { margin: 8px 12px 10px; font-size: 15px; font-weight: 600; color: var(--grc-dim); display: flex; justify-content: space-between; align-items: center; }
-    .sheet h3 button { --s: 20px; padding: 4px; }
-    .opt { width: 100%; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 18px; text-align: left; }
-    .opt:active { background: rgba(255,255,255,.08); }
-    .opt .art { width: 38px; height: 38px; --s: 20px; }
-    .opt.sel .l1 { color: var(--grc-accent); }
-    .opt .tick { margin-left: auto; color: var(--grc-accent); font-size: 18px; }
+    .sheet { width: min(520px, 100%); margin: 0 8px calc(max(env(safe-area-inset-bottom, 0px), 8px) + 8px); border-radius: 28px; padding: 12px; ${PANEL} }
+    /* picker header, 0.1.8: same layout as the typing sheet's header (title + thin close in a glass circle) */
+    .sheet h3 { margin: 0; padding: 2px 0 10px 6px; font-size: 15px; font-weight: 600; color: #fff; display: flex; justify-content: space-between; align-items: center; }
+    .opt { width: 100%; display: flex; align-items: center; gap: 12px; padding: 9px 10px; border-radius: 18px; text-align: left; transition: background .15s; }
+    .opt:active { background: rgba(255,255,255,.10); }
+    .opt.sel { background: rgba(255,255,255,.08); box-shadow: inset 0 1px 0 rgba(255,255,255,.08); }
+    .opt .art { width: 38px; height: 38px; --s: 20px; background: rgba(255,255,255,.10); box-shadow: inset 0 0 0 .5px rgba(255,255,255,.14); }
+    .opt .l2 { color: rgba(235,235,245,.6); }
+    .opt .tick { margin-left: auto; padding-right: 4px; color: #fff; font-size: 17px; font-weight: 600; }
     /* typing sheet, 0.1.7 (Grok Bot, 11 Oct 2026): same frosted glass as the keyboard banner and menus,
        banner-style header, thin close icon, glass pill buttons, no accent-coloured text links */
-    .kb .sheet { padding: 12px; border-radius: 28px; color: #fff; background: rgba(58,58,62,.72); border: 1px solid rgba(255,255,255,.10);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 18px 48px rgba(0,0,0,.6);
-      -webkit-backdrop-filter: blur(30px) saturate(180%); backdrop-filter: blur(30px) saturate(180%); }
     .kb-head { display: flex; align-items: center; gap: 12px; padding: 0 0 12px; }
     .kb-head .appicon { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 10px; background: #1c1c1e; display: grid; place-items: center;
       box-shadow: inset 0 0 0 .5px rgba(255,255,255,.18); }
@@ -683,7 +707,6 @@
     .kb .row { display: flex; gap: 10px; margin-top: 12px; }
     .kb .row button { flex: 1 1 0; height: 46px; border-radius: 23px; font-size: 16px; font-weight: 600; color: #fff; }
     .kb .row .send { background: rgba(255,255,255,.88); color: #000; border-color: rgba(255,255,255,.5); }
-    .warn { padding: 16px; color: #ff9f0a; font-size: 14px; }
   `;
 
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -805,17 +828,20 @@
     }
     /** Run steps in order. Waits (["wait", ms]) and input switches are awaited so the key lands
      *  after the receiver has changed input; plain key presses don't wait on each other. */
-    _call(steps) {
+    _call(steps, opts = {}) {
       if (!this._hass || !steps || !steps.length) return Promise.resolve();
+      // opts.quiet (0.1.8): ask HA not to show its own error toast (5th callService arg, notifyOnError) and hand errors to opts.onError
+      const callSvc = (domain, service, data) => opts.quiet ? this._hass.callService(domain, service, data, undefined, false) : this._hass.callService(domain, service, data);
+      const fail = (domain, service) => (e) => { console.warn(TAG, domain + "." + service, e); if (opts.onError) opts.onError(e); };
       const hasWait = steps.some((s) => s[0] === "wait");
       const run = async () => {
         for (const [domain, service, data] of steps) {
           if (domain === "wait") { await new Promise((r) => { const t = setTimeout(() => { this._timers.delete(t); r(); }, service); this._timers.add(t); }); continue; }
           if (!domain || !service) continue;
           try {
-            const r = this._hass.callService(domain, service, data);
-            if (r && r.catch) { if (hasWait) await r.catch((e) => console.warn(TAG, domain + "." + service, e)); else r.catch((e) => console.warn(TAG, domain + "." + service, e)); }
-          } catch (e) { console.warn(TAG, e); }
+            const r = callSvc(domain, service, data);
+            if (r && r.catch) { if (hasWait) await r.catch(fail(domain, service)); else r.catch(fail(domain, service)); }
+          } catch (e) { fail(domain, service)(e); }
         }
       };
       return run();
@@ -837,7 +863,26 @@
       const p = this.activePlayer; if (!p) return;
       const steps = (p.actions && p.actions.text) ? stepsFor(p, "text", this._states, text) : PLATFORMS[p.platform].text(p, text, done);
       const sw = done || PLATFORMS[p.platform].textLive ? inputSteps(p, "text", this._states, false) : [];
-      this._call([...sw, ...steps]);
+      // 0.1.8: no HA toast per keystroke; one glass hint, and close the sheet if the player says nothing is focused
+      return this._call([...sw, ...steps], { quiet: true, onError: (e) => this._textError(p, e) });
+    }
+    _textError(p, e) {
+      const msg = String((e && (e.message || e.error || e.code)) || "");
+      if (NOT_FOCUSED.test(msg)) { this._closeKb(); this._toast(`No text field selected on ${this._friendly(p)}`); }
+      else this._toast(`Couldn't send text to ${this._friendly(p)}`);
+    }
+    /** Keyboard focus for the active player (true/false), or null when it can't be detected. */
+    _focus(p) {
+      return kbFocus(p, this._states, { polling: !!this._kbKey && this._kbEntity === (p && p.entity), open: this._kbOpen && this._kbEntity === (p && p.entity) });
+    }
+    _closeKb() { const kb = this.shadowRoot && this.shadowRoot.querySelector(".kb"); if (kb) kb.classList.remove("show"); this._kbSheetFor = null; }
+    /** A small glass hint; only one at a time, hides itself after `ms`. */
+    _toast(text, ms = 2000) {
+      const t = this.shadowRoot && this.shadowRoot.querySelector(".toast"); if (!t) return;
+      t.textContent = text; t.classList.add("show");
+      clearTimeout(this._toastT); this._timers.delete(this._toastT);
+      this._toastT = setTimeout(() => { this._timers.delete(this._toastT); this._toastT = null; t.classList.remove("show"); }, ms);
+      this._timers.add(this._toastT);
     }
 
     // ---- build -------------------------------------------------------------
@@ -884,7 +929,8 @@
           </div>
         </div>
         <div class="menu-bg"><div class="menu" role="menu"></div></div>
-        <div class="sheet-bg picker"><div class="sheet"><h3>Control<button data-act="close" aria-label="Close">${icon("close")}</button></h3><div class="opts"></div></div></div>
+        <div class="toast" role="status" aria-live="polite"></div>
+        <div class="sheet-bg picker"><div class="sheet"><h3><span>Control</span><button class="kb-x glass" data-act="close" aria-label="Close">${icon("close")}</button></h3><div class="opts"></div></div></div>
         <div class="sheet-bg kb"><div class="sheet">
           <div class="kb-head"><span class="appicon">${REMOTE_GLYPH}</span>
             <span class="kb-txt"><span class="kb-title">Type</span><span class="kb-sub">Keyboard Input</span></span>
@@ -1063,6 +1109,9 @@
       else if (act === "keyboard") {
         this._haptic();
         const p = this.activePlayer;
+        // 0.1.8: only while a text field is focused, when the player can tell us (Apple TV sensor, Kodi poll)
+        if (this._focus(p) === false) { this._toast(`No text field selected on ${this._friendly(p)}`); return; }
+        this._kbSheetFor = p ? p.entity : null;
         r.querySelector(".kb-title").textContent = p ? (p.name || this._friendly(p)) : "Type"; // 0.1.7: banner-style header (name / "Keyboard Input")
         const ta = r.querySelector(".kb textarea"); ta.value = ""; this._kbText = "";
         r.querySelector(".kb").classList.add("show");
@@ -1110,7 +1159,7 @@
       clearTimeout(this._db_ch); this._timers.delete(this._db_ch); this._db_ch = null;
       if (this._chOpen && this._config.channel_timeout > 0) this._debounce("ch", () => this._setChOpen(false), this._config.channel_timeout);
     }
-    _closeSheets() { this.shadowRoot.querySelectorAll(".sheet-bg").forEach((s) => s.classList.remove("show")); }
+    _closeSheets() { this.shadowRoot.querySelectorAll(".sheet-bg").forEach((s) => s.classList.remove("show")); this._kbSheetFor = null; }
     _friendly(p) { const st = this._states[p.entity]; return p.name || (st && st.attributes && st.attributes.friendly_name) || p.entity; }
 
     _artHtml(p, art) {
@@ -1174,6 +1223,8 @@
       r.querySelector(".wants .t2").textContent = bt.line2;
       r.querySelector(".wants .t3").textContent = bt.body;
       r.querySelector(".wants").classList.toggle("show", wants);
+      // 0.1.8: focus dropped (or another player took over) while the typing sheet is open -> close it
+      if (this._kbSheetFor && (this._kbSheetFor !== p.entity || this._focus(p) === false)) this._closeKb();
       const textable = !!(PLATFORMS[p.platform].text(p, "x", false).length || (p.actions && p.actions.text));
       r.querySelector(".mic").style.display = textable && this._config.show_mic ? "" : "none"; // 0.1.6: off by default
       r.querySelector(".kbd").style.display = textable ? "" : "none";
@@ -1194,7 +1245,7 @@
 
   // Exposed for tests and power users.
   GlassRemoteCard.VERSION = VERSION;
-  GlassRemoteCard.helpers = { kbPollInterval, kodiKeyboardFromEvent, sourceMenu, soundModeMenu, optionSteps, moreItems, hasChannels, bannerText, normaliseConfig, inputSteps, choosePlayer, volumeTarget, nowPlaying, stepsFor, swipeDirection, guessPlatform, PLATFORMS, ICONS };
+  GlassRemoteCard.helpers = { kbFocus, kbPollInterval, kodiKeyboardFromEvent, sourceMenu, soundModeMenu, optionSteps, moreItems, hasChannels, bannerText, normaliseConfig, inputSteps, choosePlayer, volumeTarget, nowPlaying, stepsFor, swipeDirection, guessPlatform, PLATFORMS, ICONS };
 
   if (!customElements.get(TAG)) customElements.define(TAG, GlassRemoteCard);
   window.customCards = window.customCards || [];

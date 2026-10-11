@@ -191,6 +191,7 @@ function ptr(w, el, type, x = 100, y = 100) {
     m.$(".kb-sub").textContent === "Keyboard Input" && m.$(".kb .kb-x").classList.contains("glass") && !m.$(".kb .hint") &&
     [...m.card.shadowRoot.querySelectorAll(".kb .row button")].every((b) => b.classList.contains("glass")) &&
     m.$(".kb textarea").placeholder === "Type or dictate", m.$(".kb-title").textContent);
+  check("D17c 0.1.8 picker header has the same glass close as the typing sheet", !!m.$(".picker h3 .kb-x.glass"));
   const ta = m.$(".kb textarea"); ta.value = "space"; ta.dispatchEvent(new w.Event("input")); await sleep(400);
   check("D18 Kodi: live Input.SendText done=false while typing", eq(m.hass.calls, [["kodi", "call_method", { entity_id: "media_player.kodi", method: "Input.SendText", text: "space", done: false }]]), m.hass.calls);
   ta.value = "space x"; ta.dispatchEvent(new w.Event("input"));
@@ -410,7 +411,7 @@ function ptr(w, el, type, x = 100, y = 100) {
         && /\.ch \.chb\.up \{ transform: translateY\(-14px\)/.test(cssT) && /\.ch \.chb\.dn \{ transform: translateY\(14px\)/.test(cssT) && /\.ch > button \{ position: absolute; left: 50%; top: 50%;/.test(cssT));
     }
     {
-      const sm = mount(w, { ...CONFIG(), show_mic: true }, states());
+      const sm = mount(w, { ...CONFIG(), show_mic: true }, states({ "binary_sensor.lr_keyboard": { state: "on" } })); // 0.1.8: Apple TV needs keyboard focus
       check("MIC1 show_mic: true brings the mic back (opens the text box)", sm.$(".mic").style.display === "" && (sm.$(".mic").click(), sm.$(".kb").classList.contains("show")));
       sm.card.remove();
       check("MIC2 show_mic validation + default false", bad({ ...CONFIG(), show_mic: "yes" }) && H.normaliseConfig(CONFIG()).show_mic === false);
@@ -490,6 +491,14 @@ function ptr(w, el, type, x = 100, y = 100) {
     k.hass.fire(ev(10109, "Numeric input"));
     k.$(".wants").click();
     check("KB14 numeric input shows it too; tapping opens text entry", k.$(".kb").classList.contains("show"));
+    k.hass.fire(ev(10000, "Home"));
+    check("FOC7 Kodi: keyboard window closes -> typing sheet closes", !k.$(".kb").classList.contains("show"));
+    k.$(".kbd").click();
+    check("FOC8 Kodi polled, no keyboard window -> keyboard button shows the hint, no sheet",
+      !k.$(".kb").classList.contains("show") && k.$(".toast").classList.contains("show") && k.$(".toast").textContent === "No text field selected on Kodi", k.$(".toast").textContent);
+    k.hass.fire(ev(10103, "Virtual keyboard")); k.$(".kbd").click();
+    check("FOC9 Kodi keyboard window open -> keyboard button opens the sheet", k.$(".kb").classList.contains("show"));
+    k.hass.fire(ev(10000, "Home"));
     k.card._closeSheets();
     // video starts -> stop
     const before = polls().length;
@@ -523,6 +532,51 @@ function ptr(w, el, type, x = 100, y = 100) {
     k = mount(w, CONFIG(), kst()); await sleep(50);
     check("KB22 no hass.connection -> no polling", polls().length === 0);
     k.card.remove();
+    w.localStorage.clear();
+  }
+
+  // ---- FOC: keyboard focus gating + glass hint (0.1.8, Grok Bot 11 Oct 2026) ----
+  {
+    w.localStorage.clear();
+    const atv = { "media_player.kodi": { state: "idle" }, "media_player.lr_tv": { attributes: { source: "Apple TV" } } };
+    const pl = (e) => CONFIG().players.find((p) => p.entity === e);
+    check("FOC1 kbFocus: sensor on/off -> true/false; Kodi only while polled; webOS -> null",
+      H.kbFocus(pl("media_player.lr_appletv"), states({ "binary_sensor.lr_keyboard": { state: "on" } })) === true &&
+      H.kbFocus(pl("media_player.lr_appletv"), states()) === false &&
+      H.kbFocus(pl("media_player.kodi"), states(), { polling: true, open: false }) === false &&
+      H.kbFocus(pl("media_player.kodi"), states(), { polling: true, open: true }) === true &&
+      H.kbFocus(pl("media_player.kodi"), states(), { polling: false, open: false }) === null &&
+      H.kbFocus(pl("media_player.lr_tv"), states()) === null);
+    let f = mount(w, CONFIG(), states(atv));
+    f.$(".kbd").click();
+    check("FOC2 Apple TV, no text field focused -> no sheet, glass hint instead",
+      !f.$(".kb").classList.contains("show") && f.$(".toast").classList.contains("show") && f.$(".toast").textContent === "No text field selected on Living Room Apple TV" && f.hass.calls.length === 0,
+      f.$(".toast").textContent);
+    f.card._toast("x", 40); await sleep(90);
+    check("FOC3 hint hides itself; one toast element only", !f.$(".toast").classList.contains("show") && f.card.shadowRoot.querySelectorAll(".toast").length === 1);
+    check("FOC3b hint uses the shared glass panel", /\.toast \{[^}]*backdrop-filter: blur\(30px\)/.test(f.$("style").textContent));
+    f.card.hass = fakeHass(states({ ...atv, "binary_sensor.lr_keyboard": { state: "on" } }));
+    f.$(".kbd").click();
+    check("FOC4 focused -> keyboard button opens the sheet", f.$(".kb").classList.contains("show"));
+    f.card.hass = fakeHass(states(atv));
+    check("FOC5 focus drops while open -> sheet closes", !f.$(".kb").classList.contains("show"));
+    // a text call that fails: no HA toast (notifyOnError false), one glass hint, sheet closed
+    const errHass = fakeHass(states({ ...atv, "binary_sensor.lr_keyboard": { state: "on" } }));
+    const args = [];
+    errHass.callService = (...a) => { args.push(a); return Promise.reject(new Error("No text input field is currently focused on the Apple TV")); };
+    f.card.hass = errHass;
+    f.$(".kbd").click();
+    const ta = f.$(".kb textarea");
+    for (const t of ["a", "ab", "abc"]) { ta.value = t; ta.dispatchEvent(new w.Event("input")); await sleep(300); }
+    check("FOC6 text errors: callService asked not to notify (5th arg false), one glass hint, sheet closed",
+      args.length >= 1 && args.every((a) => a[0] === "apple_tv" && a[4] === false) && f.card.shadowRoot.querySelectorAll(".toast").length === 1 &&
+      f.$(".toast").classList.contains("show") && /No text field selected/.test(f.$(".toast").textContent) && !f.$(".kb").classList.contains("show"), args.map((a) => a.length));
+    f.card.remove();
+    w.localStorage.clear();
+    f = mount(w, { players: [{ entity: "media_player.lr_tv", platform: "webostv" }] }, states());
+    f.$(".kbd").click();
+    check("FOC10 webOS (no focus detection) -> keyboard button still opens the sheet", f.$(".kb").classList.contains("show") && !f.$(".toast").classList.contains("show"));
+    f.card.remove();
     w.localStorage.clear();
   }
 
