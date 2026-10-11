@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.3] - unreleased
+
+### Changed
+- The pad's bottom row (sources | -10 | ⋯ | +10 | CH) now works like Apple's iOS Remote: it is hidden by default, so the touchpad is clear. Tap **CH** in the bottom-right corner of the pad to show it, and tap CH again to hide it. Players without channel keys (e.g. Kodi) get a small chevron in the same spot instead.
+- The CH up/down chevrons appear above and below the CH label when the row is open. They are now sharp chevrons with Apple's spacing, and the row's icons and positions match Apple's proportions.
+- The row only catches taps on its own buttons, so taps and swipes anywhere else on the pad still work while it is open.
+
+### Added
+- `bottom_row: always` keeps the 0.1.2 always-visible row (default `toggle`).
+
 ## [0.1.2] - unreleased
 
 ### Added

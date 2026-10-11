@@ -11,8 +11,9 @@ SHOTS = [  # name, query, viewport, safe-area (top, bottom), click
     ("remote-apple-tv-wants-text", "?src=Apple%20TV&kodi=idle&kbd=on&atv=playing", (393, 852), (59, 34), None),
     ("picker", "", (393, 852), (59, 34), ".pill"),
     ("keyboard", "?src=Apple%20TV&kodi=idle&atv=playing", (393, 852), (59, 34), ".mic"),
-    ("sources-menu", "", (393, 852), (59, 34), ".src"),
-    ("more-menu", "", (393, 852), (59, 34), ".more"),
+    ("sources-menu", "", (393, 852), (59, 34), "row:.src"),
+    ("bottom-row", "?src=Apple%20TV&kodi=idle&atv=playing", (393, 852), (59, 34), "row:"),
+    ("more-menu", "", (393, 852), (59, 34), "row:.more"),
     ("sound-mode-menu", "", (393, 852), (59, 34), "hold:.badge"),
     ("remote-small-phone", "", (375, 667), (20, 0), None),
     ("card-layout", "?layout=card", (468, 690), (0, 0), None),
@@ -33,6 +34,10 @@ async def main():
             if click and click.startswith("hold:"):
                 await pg.locator("glass-remote-card").locator(click[5:]).first.hover()
                 await pg.mouse.down(); await pg.wait_for_timeout(700); await pg.mouse.up(); await pg.wait_for_timeout(400)
+            elif click and click.startswith("row:"):  # 0.1.3: open the pad's bottom row first (tap CH)
+                await pg.locator("glass-remote-card").locator(".chl").first.click(); await pg.wait_for_timeout(400)
+                if click[4:]:
+                    await pg.locator("glass-remote-card").locator(click[4:]).first.click(); await pg.wait_for_timeout(400)
             elif click:
                 await pg.locator("glass-remote-card").locator(click).first.click(); await pg.wait_for_timeout(400)
                 if click == ".mic":

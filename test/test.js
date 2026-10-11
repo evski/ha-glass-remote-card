@@ -327,7 +327,7 @@ function ptr(w, el, type, x = 100, y = 100) {
   const dcfg = CONFIG(); dcfg.players[1].sources = { entity: "media_player.avr", include: [{ UHD: "Kodi" }, { PVR: "Apple TV" }] };
   m = mount(w, dcfg, AVRS);
   check("O8 bottom row order: sources | -10 | ... | +10 | CH", eq([...m.$(".inner").children].map((e) => e.className.split(" ")[0] || e.dataset.key), ["src", "skip_back", "more", "skip_fwd", "ch"]));
-  check("O9 Kodi: CH slot hidden, sources + more shown", m.$(".ch").classList.contains("gone") && !m.$(".src").classList.contains("gone") && !m.$(".more").classList.contains("gone"));
+  check("O9 Kodi: CH chevrons hidden (toggle stays), sources + more shown", [...m.card.shadowRoot.querySelectorAll(".ch .chb")].every((x) => x.classList.contains("gone")) && !m.$(".chl").classList.contains("gone") && !m.$(".src").classList.contains("gone") && !m.$(".more").classList.contains("gone"));
   check("O10 no separate info/subtitle buttons, mic still on the right edge", !m.$('.inner [data-key="info"]') && !!m.$(".mic"));
   m.$(".src").click(); await sleep(10);
   const mis = [...m.card.shadowRoot.querySelectorAll(".menu .mi")];
@@ -355,6 +355,55 @@ function ptr(w, el, type, x = 100, y = 100) {
   ptr(w, m.$(".tab[data-key=\"volume_up\"]"), "pointerdown"); await sleep(700); ptr(w, m.$(".tab[data-key=\"volume_up\"]"), "pointerup");
   check("O19 + tab still repeats while held", m.hass.calls.filter((c) => c[1] === "volume_up").length >= 2);
   m.card.remove();
+
+  // ---- BR: bottom row toggle like Apple's iOS Remote (0.1.3, Grok Bot 11 Oct 2026) ------------
+  {
+    w.localStorage.clear();
+    let b = mount(w, dcfg, AVRS);
+    const inner = () => b.$(".inner"), chl = () => b.$(".chl");
+    check("BR1 Kodi (no channels): row collapsed by default", !inner().classList.contains("open") && chl().getAttribute("aria-expanded") === "false");
+    check("BR2 Kodi toggle is a chevron (not CH) in the CH slot", chl().textContent === "" && chl().querySelector("svg") && chl().dataset.label === "up" && chl().closest(".ch") === b.$(".inner .ch"));
+    check("BR3 the row only catches taps on its own buttons (pad stays a touchpad)", /\.inner \{[^}]*pointer-events: none/.test(b.$("style").textContent) && /\.inner:not\(\.open\) > button[^{]*\{[^}]*pointer-events: none/.test(b.$("style").textContent));
+    chl().click();
+    check("BR4 tap toggle -> row opens, chevron flips down, no service call", inner().classList.contains("open") && chl().dataset.label === "down" && chl().getAttribute("aria-expanded") === "true" && b.hass.calls.length === 0);
+    b.$(".more").click(); await sleep(10);
+    check("BR5 More still opens its menu from the open row", b.$(".menu-bg").classList.contains("show"));
+    b.$(".menu-bg").click();
+    b.$(".src").click(); await sleep(10);
+    check("BR6 Sources still opens its menu", b.$(".menu-bg").classList.contains("show") && b.$(".menu .mt").textContent === "Sources");
+    b.$(".menu-bg").click();
+    const sk = b.$('.inner [data-key="skip_fwd"]'); ptr(w, sk, "pointerdown"); ptr(w, sk, "pointerup"); await sleep(10);
+    check("BR7 +10 still sends the skip", /Player\.Seek/.test(JSON.stringify(b.hass.calls.slice(-1)[0])), b.hass.calls.slice(-1)[0]);
+    // the pad itself still takes taps and swipes while the row is open
+    const pad = b.$(".pad"); const n0 = b.hass.calls.length;
+    ptr(w, pad, "pointerdown", 100, 100); ptr(w, pad, "pointerup", 100, 100); await sleep(10);
+    check("BR8 tap on the pad while open -> select, row stays open", b.hass.calls.length === n0 + 1 && /Select/.test(JSON.stringify(b.hass.calls.slice(-1)[0])) && inner().classList.contains("open"), b.hass.calls.slice(-1)[0]);
+    ptr(w, pad, "pointerdown", 100, 100); ptr(w, pad, "pointermove", 100, 40); ptr(w, pad, "pointerup", 100, 40); await sleep(10);
+    check("BR9 swipe on the pad while open -> up", /Up/.test(JSON.stringify(b.hass.calls.slice(-1)[0])), b.hass.calls.slice(-1)[0]);
+    chl().click();
+    check("BR10 tap toggle again -> row hides", !inner().classList.contains("open") && chl().dataset.label === "up");
+    b.card.remove();
+    // Apple TV (channels): CH label is the toggle, chevrons send channel keys when open
+    w.localStorage.clear();
+    b = mount(w, CONFIG(), states()); b.card._writePick("media_player.lr_appletv"); b.card.hass = { ...b.hass, states: states() };
+    check("BR11 Apple TV: 'CH' label visible, row collapsed", chl().textContent === "CH" && !inner().classList.contains("open") && b.card.activeEntity === "media_player.lr_appletv");
+    check("BR12 chevrons present but hidden until open", [...b.card.shadowRoot.querySelectorAll(".ch .chb")].every((x) => !x.classList.contains("gone")) && /\.inner:not\(\.open\) \.ch \.chb/.test(b.$("style").textContent));
+    chl().click();
+    const up = b.$('.ch [data-key="channel_up"]'); ptr(w, up, "pointerdown"); ptr(w, up, "pointerup"); await sleep(10);
+    check("BR13 open, CH up -> channel_up on the Apple TV remote", inner().classList.contains("open") && /channel_up/.test(JSON.stringify(b.hass.calls)), b.hass.calls);
+    const nC = b.hass.calls.length; chl().click(); await sleep(10);
+    check("BR14 tapping 'CH' again hides the row, sends nothing", !inner().classList.contains("open") && b.hass.calls.length === nC && chl().textContent === "CH");
+    b.card.remove();
+    // bottom_row: always keeps the 0.1.2 behaviour
+    w.localStorage.clear();
+    b = mount(w, { ...CONFIG(), bottom_row: "always" }, states());
+    check("BR15 bottom_row: always -> row open, no toggle on Kodi", inner().classList.contains("open") && chl().classList.contains("gone"));
+    chl().click();
+    check("BR16 ... and it can't be collapsed", inner().classList.contains("open"));
+    b.card.remove();
+    check("BR17 bottom_row validation", bad({ ...CONFIG(), bottom_row: "sometimes" }) && H.normaliseConfig(CONFIG()).bottom_row === "toggle");
+    w.localStorage.clear();
+  }
 
   // ---- IP: input switch on picking a player --------------------------------------------
   {
