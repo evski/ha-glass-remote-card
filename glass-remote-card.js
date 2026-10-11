@@ -12,11 +12,14 @@
  * Tap CH again, or leave it ~5 s (`channel_timeout`), and it folds back. Replaces 0.1.3's hidden row.
  * 0.1.6 (Grok Bot, 11 Oct 2026): the mic button is gone by default (it did the same as the keyboard
  * button); `show_mic: true` brings it back.
+ * 0.1.7 (Grok Bot, 11 Oct 2026): the typing sheet (keyboard button) now matches the Liquid Glass look and
+ * the keyboard banner: same frosted glass panel and app-icon header, thin close icon in a glass circle,
+ * glass pill Clear/Send buttons (no accent-coloured text links), shorter placeholder, no hint line.
  */
 (() => {
   "use strict";
 
-  const VERSION = "0.1.6";
+  const VERSION = "0.1.7";
   const TAG = "glass-remote-card";
   const PICK_KEY = "glass-remote-card:pick:";
 
@@ -659,11 +662,27 @@
     .opt .art { width: 38px; height: 38px; --s: 20px; }
     .opt.sel .l1 { color: var(--grc-accent); }
     .opt .tick { margin-left: auto; color: var(--grc-accent); font-size: 18px; }
-    .kb textarea { width: 100%; min-height: 96px; resize: none; border-radius: 18px; padding: 14px; font: inherit; font-size: 20px;
-      color: var(--grc-fg); background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); outline: none; }
-    .kb .row { display: flex; justify-content: space-between; margin-top: 10px; }
-    .kb .row button { padding: 10px 16px; border-radius: 16px; font-weight: 600; color: var(--grc-accent); }
-    .kb .hint { font-size: 12px; color: var(--grc-dim); margin: 8px 6px 0; }
+    /* typing sheet, 0.1.7 (Grok Bot, 11 Oct 2026): same frosted glass as the keyboard banner and menus,
+       banner-style header, thin close icon, glass pill buttons, no accent-coloured text links */
+    .kb .sheet { padding: 12px; border-radius: 28px; color: #fff; background: rgba(58,58,62,.72); border: 1px solid rgba(255,255,255,.10);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 18px 48px rgba(0,0,0,.6);
+      -webkit-backdrop-filter: blur(30px) saturate(180%); backdrop-filter: blur(30px) saturate(180%); }
+    .kb-head { display: flex; align-items: center; gap: 12px; padding: 0 0 12px; }
+    .kb-head .appicon { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 10px; background: #1c1c1e; display: grid; place-items: center;
+      box-shadow: inset 0 0 0 .5px rgba(255,255,255,.18); }
+    .kb-head .appicon svg { width: 30px; height: 30px; }
+    .kb-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; font-size: 15px; line-height: 1.25; }
+    .kb-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .kb-sub { color: rgba(235,235,245,.6); font-size: 13px; }
+    .kb-x { flex: 0 0 auto; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; --s: 15px; }
+    .kb-x .icon { opacity: .8; }
+    .kb textarea { display: block; width: 100%; min-height: 84px; resize: none; border-radius: 20px; padding: 13px 16px; font: inherit; font-size: 19px; line-height: 1.3;
+      color: #fff; background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.08); box-shadow: inset 0 1px 2px rgba(0,0,0,.35); outline: none;
+      caret-color: #fff; user-select: text; -webkit-user-select: text; }
+    .kb textarea::placeholder { color: rgba(235,235,245,.38); }
+    .kb .row { display: flex; gap: 10px; margin-top: 12px; }
+    .kb .row button { flex: 1 1 0; height: 46px; border-radius: 23px; font-size: 16px; font-weight: 600; color: #fff; }
+    .kb .row .send { background: rgba(255,255,255,.88); color: #000; border-color: rgba(255,255,255,.5); }
     .warn { padding: 16px; color: #ff9f0a; font-size: 14px; }
   `;
 
@@ -866,10 +885,12 @@
         </div>
         <div class="menu-bg"><div class="menu" role="menu"></div></div>
         <div class="sheet-bg picker"><div class="sheet"><h3>Control<button data-act="close" aria-label="Close">${icon("close")}</button></h3><div class="opts"></div></div></div>
-        <div class="sheet-bg kb"><div class="sheet"><h3><span class="kb-title">Type</span><button data-act="close" aria-label="Close">${icon("close")}</button></h3>
-          <textarea rows="2" placeholder="Tap here, then the keyboard mic to speak" autocapitalize="off" autocomplete="off" enterkeyhint="send"></textarea>
-          <div class="hint">Use the microphone key on your phone's keyboard to dictate.</div>
-          <div class="row"><button data-act="kb-clear">Clear</button><button data-act="kb-send">Send</button></div></div></div>`;
+        <div class="sheet-bg kb"><div class="sheet">
+          <div class="kb-head"><span class="appicon">${REMOTE_GLYPH}</span>
+            <span class="kb-txt"><span class="kb-title">Type</span><span class="kb-sub">Keyboard Input</span></span>
+            <button class="kb-x glass" data-act="close" aria-label="Close">${icon("close")}</button></div>
+          <textarea rows="2" placeholder="Type or dictate" aria-label="Text to send" autocapitalize="off" autocomplete="off" enterkeyhint="send"></textarea>
+          <div class="row"><button class="glass" data-act="kb-clear">Clear</button><button class="glass send" data-act="kb-send">Send</button></div></div></div>`;
       this._wire();
       this._built = true;
     }
@@ -1042,7 +1063,7 @@
       else if (act === "keyboard") {
         this._haptic();
         const p = this.activePlayer;
-        r.querySelector(".kb-title").textContent = "Type on " + (p ? (p.name || this._friendly(p)) : "");
+        r.querySelector(".kb-title").textContent = p ? (p.name || this._friendly(p)) : "Type"; // 0.1.7: banner-style header (name / "Keyboard Input")
         const ta = r.querySelector(".kb textarea"); ta.value = ""; this._kbText = "";
         r.querySelector(".kb").classList.add("show");
         ta.focus(); // iOS only raises the keyboard if this runs inside the tap, which it does

@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.7] - unreleased
+
+### Changed
+- The typing sheet (keyboard button) now matches the rest of the card: the same frosted Liquid Glass panel and app-icon header as the keyboard banner, a thin close icon in a glass circle, and glass pill Clear and Send buttons instead of coloured text links. The placeholder is shorter ("Type or dictate") and the extra hint line is gone.
+- README: says plainly that no other custom cards or add-ons are needed, only Home Assistant's built-in integrations.
+
 ## [0.1.6] - unreleased
 
 ### Changed

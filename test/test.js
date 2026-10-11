@@ -186,6 +186,11 @@ function ptr(w, el, type, x = 100, y = 100) {
   check("D17a mic hidden by default (0.1.6), keyboard button kept", m.$(".mic").style.display === "none" && m.$(".kbd").style.display !== "none");
   m.$(".kbd").click();
   check("D17 keyboard button opens the text box", m.$(".kb").classList.contains("show"));
+  check("D17b 0.1.7 typing sheet: glass header with player name, glass pill buttons, no hint line or accent text links",
+    m.$(".kb .kb-head .appicon") && m.$(".kb-title").textContent.length > 0 && !/^Type on /.test(m.$(".kb-title").textContent) &&
+    m.$(".kb-sub").textContent === "Keyboard Input" && m.$(".kb .kb-x").classList.contains("glass") && !m.$(".kb .hint") &&
+    [...m.card.shadowRoot.querySelectorAll(".kb .row button")].every((b) => b.classList.contains("glass")) &&
+    m.$(".kb textarea").placeholder === "Type or dictate", m.$(".kb-title").textContent);
   const ta = m.$(".kb textarea"); ta.value = "space"; ta.dispatchEvent(new w.Event("input")); await sleep(400);
   check("D18 Kodi: live Input.SendText done=false while typing", eq(m.hass.calls, [["kodi", "call_method", { entity_id: "media_player.kodi", method: "Input.SendText", text: "space", done: false }]]), m.hass.calls);
   ta.value = "space x"; ta.dispatchEvent(new w.Event("input"));

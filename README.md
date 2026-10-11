@@ -9,7 +9,7 @@
 **An Apple TV Remote-style Liquid Glass remote for Home Assistant that follows whatever you're watching.**
 One card drives your Apple TVs, Kodi, LG webOS TVs and any other `media_player`: touchpad, volume, keyboard and dictation, with the now-playing artwork on top. Built for the iPhone companion app, full screen, and it works in any browser.
 
-Single JavaScript file. No dependencies: no card-mod, browser_mod, kiosk-mode or template helpers needed.
+**Nothing else to install.** It's a single JavaScript file. You don't need any other custom cards, HACS add-ons or Home Assistant add-ons: no card-mod, browser_mod, kiosk-mode, template helpers or extra scripts. It only uses Home Assistant's built-in integrations for your devices: [Apple TV](https://www.home-assistant.io/integrations/apple_tv/), [Kodi](https://www.home-assistant.io/integrations/kodi/) and [LG webOS TV](https://www.home-assistant.io/integrations/webostv/). Any other `media_player` works through its standard services.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/evski/ha-glass-remote-card/main/docs/images/remote-kodi.png" width="240" alt="Remote controlling Kodi, with artwork in the top pill">
