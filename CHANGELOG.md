@@ -4,6 +4,30 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.1] - unreleased
+
+### Added
+- Per-player `input:` option to switch an AVR, soundbar or TV input before a key is sent. Options:
+  - `entity`, `source`
+  - `turn_on` and `turn_on_delay`
+  - `triggers` (`home`, `power`, `select`, any key, `any`, `first`)
+  - `skip_if_selected`
+  - `delay`
+  - custom `action` (with `$source`)
+  - a list of inputs, handled in order
+- The pad's bottom row now matches Apple's remote during playback: sources list | -10 | ... | +10 | CH.
+  - **Sources**: a glass picker of the player's or another entity's sources, with the current one ticked. Options: `sources` (`entity`, `include`, `exclude`, `rename`, `action`, `false`), and `select`/`input_select` entities are supported.
+  - **More (...)**: info, subtitles, sound mode and per-platform extras (`more` list, custom items, `false`).
+  - **CH** up/down for Apple TV and LG; opt in with `channels`.
+- Sound mode menu: press and hold the speaker badge (also in More). Options: `sound_mode` (`entity`, `modes`, `exclude`, `rename`, `action`, `false`).
+- Helpers `inputSteps`, `sourceMenu`, `soundModeMenu`, `optionSteps`, `moreItems` and `hasChannels`, with tests.
+- A test that Apple TV power only uses `media_player.turn_on`/`turn_off`, never a held remote power command.
+
+### Changed
+- The "wants text" bar is now an iOS-style keyboard notification. It is a dark glass banner that slides down over the top row, with a Siri Remote app icon and the text "<Device> Keyboard / Keyboard Input / Enter text on ... Press to type."
+- Info and subtitles moved from separate icons into the More menu.
+- Key sequences now run in order and wait for an input switch to finish.
+
 ## [0.1.0] - unreleased
 
 ### Added
@@ -20,4 +44,5 @@ All notable changes to this project are documented here. The format follows
 - Text: keyboard and dictation text box, and the automatic "wants text" bar.
 - Look and feel: Liquid Glass styling, thin line icons, haptics.
 
+[0.1.1]: https://github.com/evski/ha-glass-remote-card/releases/tag/v0.1.1
 [0.1.0]: https://github.com/evski/ha-glass-remote-card/releases/tag/v0.1.0

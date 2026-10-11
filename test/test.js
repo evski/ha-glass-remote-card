@@ -188,7 +188,9 @@ function ptr(w, el, type, x = 100, y = 100) {
   m.card.remove();
   m = mount(w, CONFIG(), states({ "media_player.kodi": { state: "idle" }, "media_player.lr_tv": { attributes: { source: "Apple TV" } }, "binary_sensor.lr_keyboard": { state: "on" } }));
   check("D20 Apple TV active via TV input", m.card.activeEntity === "media_player.lr_appletv");
-  check("D21 wants-text bar shown", m.$(".wants").classList.contains("show") && /wants text/.test(m.$(".wants").textContent));
+  check("D21 keyboard banner shown (iOS-style)", m.$(".wants").classList.contains("show") && m.$(".wants .t1").textContent === "Living Room Apple TV Keyboard" &&
+    m.$(".wants .t2").textContent === "Keyboard Input" && /^Enter text on your Apple TV using your (iOS )?keyboard\. Press to type\.$/.test(m.$(".wants .t3").textContent), m.$(".wants").textContent);
+  check("D21b banner sits at the top of the remote, not in the pad", m.$(".wants").parentElement === m.$(".root") && !!m.$(".wants .appicon svg"));
   m.$(".wants").click();
   const ta2 = m.$(".kb textarea"); ta2.value = "star"; ta2.dispatchEvent(new w.Event("input")); await sleep(400);
   check("D22 Apple TV: live set_keyboard_text", eq(m.hass.calls.pop(), ["apple_tv", "set_keyboard_text", { config_entry_id: "ENTRY1", text: "star" }]));
@@ -204,6 +206,146 @@ function ptr(w, el, type, x = 100, y = 100) {
   check("D25 generic: mic/keyboard hidden, card layout", m.$(".mic").style.display === "none" && m.$(".root").classList.contains("card"));
   m.card.remove();
   check("D26 timers cleared on disconnect", m.card._timers.size === 0);
+
+  // ---- B: banner wording --------------------------------------------------------------
+  check("B1 Apple TV wording (iOS)", eq(H.bannerText({ platform: "apple_tv" }, "Den", true), { title: "Den Keyboard", line2: "Keyboard Input", body: "Enter text on your Apple TV using your iOS keyboard. Press to type." }));
+  check("B2 Kodi wording", H.bannerText({ platform: "kodi" }, "Kodi", false).body === "Enter text on Kodi using your keyboard. Press to type.");
+  check("B3 LG wording", H.bannerText({ platform: "webostv" }, "TV", true).body === "Enter text on your LG TV using your iOS keyboard. Press to type.");
+  check("B4 generic uses the name", H.bannerText({ platform: "generic" }, "Shield", false).body.startsWith("Enter text on Shield"));
+
+  // ---- I: input switching -----------------------------------------------------------
+  const INP = (o = {}) => H.normaliseConfig({ players: [{ entity: "media_player.kodi", platform: "kodi", input: { entity: "media_player.avr", source: "UHD", ...o } }] }).players[0];
+  const avr = (st, src) => states({ "media_player.avr": { state: st, attributes: { source: src } } });
+  check("I1 defaults", eq(INP().input[0], { turn_on: false, turn_on_delay: 1500, triggers: ["home"], skip_if_selected: true, delay: 0, entity: "media_player.avr", source: "UHD" }));
+  check("I2 home on another source -> select_source", eq(H.inputSteps(INP(), "home", avr("on", "PVR")), [["media_player", "select_source", { entity_id: "media_player.avr", source: "UHD" }]]));
+  check("I3 already on source -> nothing (skip_if_selected)", H.inputSteps(INP(), "home", avr("on", "UHD")).length === 0);
+  check("I4 skip_if_selected false -> always switch", H.inputSteps(INP({ skip_if_selected: false }), "home", avr("on", "UHD")).length === 1);
+  check("I5 not a trigger key -> nothing", H.inputSteps(INP(), "select", avr("on", "PVR")).length === 0);
+  check("I6 hold variant counts (home_hold)", H.inputSteps(INP(), "home_hold", avr("on", "PVR")).length === 1);
+  check("I7 triggers list", H.inputSteps(INP({ triggers: ["power", "select"] }), "select", avr("on", "PVR")).length === 1 && H.inputSteps(INP({ triggers: ["power", "select"] }), "home", avr("on", "PVR")).length === 0);
+  check("I8 triggers any", H.inputSteps(INP({ triggers: "any" }), "left", avr("on", "PVR")).length === 1);
+  check("I9 triggers first: only the first press", H.inputSteps(INP({ triggers: ["first"] }), "left", avr("on", "PVR"), true).length === 1 && H.inputSteps(INP({ triggers: ["first"] }), "left", avr("on", "PVR"), false).length === 0);
+  check("I10 AVR off, turn_on false -> nothing", H.inputSteps(INP(), "home", avr("off", "PVR")).length === 0);
+  check("I11 AVR off, turn_on -> on, wait, switch", eq(H.inputSteps(INP({ turn_on: true, turn_on_delay: 3000 }), "home", avr("off", "PVR")),
+    [["media_player", "turn_on", { entity_id: "media_player.avr" }], ["wait", 3000], ["media_player", "select_source", { entity_id: "media_player.avr", source: "UHD" }]]));
+  check("I12 AVR standby counts as off", H.inputSteps(INP({ turn_on: true }), "home", avr("standby", "UHD"))[0][1] === "turn_on");
+  check("I13 delay after switching", eq(H.inputSteps(INP({ delay: 800 }), "home", avr("on", "PVR")).slice(-1)[0], ["wait", 800]));
+  check("I14 custom action with $source", eq(H.inputSteps(INP({ action: { service: "script.avr_select", data: { source: "$source", zone: 1 } } }), "home", avr("on", "PVR")),
+    [["script", "avr_select", { source: "UHD", zone: 1 }]]));
+  check("I15 custom action without source (no skip check)", H.inputSteps(H.normaliseConfig({ players: [{ entity: "media_player.kodi", platform: "kodi", input: { entity: "media_player.avr", action: { service: "script.kodi_input" } } }] }).players[0], "home", avr("on", "UHD")).length === 1);
+  check("I16 unavailable AVR -> nothing", H.inputSteps(INP({ turn_on: true }), "home", avr("unavailable", "PVR")).length === 0);
+  const two = H.normaliseConfig({ players: [{ entity: "media_player.kodi", platform: "kodi", input: [
+    { entity: "media_player.avr", source: "UHD" }, { entity: "media_player.lr_tv", source: "HDMI 2", triggers: ["home", "power"] }] }] }).players[0];
+  check("I17 several inputs (AVR + TV HDMI) in order", eq(H.inputSteps(two, "home", states({ "media_player.avr": { attributes: { source: "PVR" } } })).map((x) => x[2].source), ["UHD", "HDMI 2"]));
+  check("I18 validation: entity required", bad({ players: [{ entity: "media_player.k", input: { source: "UHD" } }] }));
+  check("I19 validation: source or action required", bad({ players: [{ entity: "media_player.k", input: { entity: "media_player.avr" } }] }));
+  check("I20 validation: unknown trigger", bad({ players: [{ entity: "media_player.k", input: { entity: "media_player.avr", source: "x", triggers: ["teleport"] } }] }));
+  check("I21 validation: delay must be ms", bad({ players: [{ entity: "media_player.k", input: { entity: "media_player.avr", source: "x", delay: "2s" } }] }));
+
+  // DOM: Home on Kodi switches the AVR first, then sends Home
+  w.localStorage.clear();
+  const icfg = CONFIG(); icfg.players[1].input = { entity: "media_player.avr", source: "UHD", delay: 100 };
+  m = mount(w, icfg, states({ "media_player.avr": { attributes: { source: "PVR" } } }));
+  const home = m.$('[data-key="home"]');
+  ptr(w, home, "pointerdown"); ptr(w, home, "pointerup"); await sleep(50);
+  check("I22 Home: select_source sent first, Home waits for delay", eq(m.hass.calls, [["media_player", "select_source", { entity_id: "media_player.avr", source: "UHD" }]]), m.hass.calls);
+  await sleep(150);
+  check("I23 ...then Kodi Input.Home", eq(m.hass.calls[1], ["kodi", "call_method", { entity_id: "media_player.kodi", method: "Input.Home" }]), m.hass.calls);
+  m.card.remove();
+  m = mount(w, icfg, states({ "media_player.avr": { attributes: { source: "UHD" } } }));
+  ptr(w, m.$('[data-key="home"]'), "pointerdown"); ptr(w, m.$('[data-key="home"]'), "pointerup"); await sleep(200);
+  check("I24 AVR already on UHD -> only Home", eq(m.hass.calls, [["kodi", "call_method", { entity_id: "media_player.kodi", method: "Input.Home" }]]), m.hass.calls);
+  ptr(w, m.$('[data-key="back"]'), "pointerdown"); ptr(w, m.$('[data-key="back"]'), "pointerup"); await sleep(50);
+  check("I25 other keys unaffected", m.hass.calls.length === 2 && m.hass.calls[1][2].method === "Input.Back");
+  m.card.remove();
+
+  // ---- PW: power (Apple TV) ------------------------------------------------------------
+  {
+    const atv = H.normaliseConfig(CONFIG()).players[0];
+    const on = H.stepsFor(atv, "power", states({ "media_player.lr_appletv": { state: "playing" } }));
+    const off = H.stepsFor(atv, "power", states({ "media_player.lr_appletv": { state: "standby" } }));
+    check("PW1 Apple TV power on -> media_player.turn_off", eq(on, [["media_player", "turn_off", { entity_id: "media_player.lr_appletv" }]]), on);
+    check("PW2 Apple TV power off/standby -> media_player.turn_on", eq(off, [["media_player", "turn_on", { entity_id: "media_player.lr_appletv" }]]), off);
+    check("PW3 no power long-press: nothing sends remote turn_off/suspend with hold",
+      !H.PLATFORMS.apple_tv.keys.power_hold && !Object.values(H.PLATFORMS.apple_tv.keys).some((f) => { const st = f(atv, { state: "on" }); return st && st[1] === "send_command" && /turn_off|turn_on|suspend|wakeup/.test(st[2].command); }));
+    w.localStorage.clear();
+    const mm = mount(w, CONFIG(), states({ "media_player.lr_appletv": { state: "playing" }, "media_player.kodi": { state: "idle" } }));
+    const pw = mm.$('[data-key="power"]');
+    ptr(w, pw, "pointerdown"); await sleep(700); ptr(w, pw, "pointerup"); await sleep(20);
+    check("PW4 holding power on the card sends one media_player.turn_off, no hold_secs", eq(mm.hass.calls, [["media_player", "turn_off", { entity_id: "media_player.lr_appletv" }]]), mm.hass.calls);
+    mm.card.remove();
+  }
+
+  // ---- S: sources ----------------------------------------------------------------------
+  const SP = (o, extra = {}) => H.normaliseConfig({ players: [{ entity: "media_player.kodi", platform: "kodi", volume_entity: "media_player.avr", ...o }] }).players[0];
+  const AVRS = states({ "media_player.avr": { attributes: { source: "PVR", source_list: ["STB", "PVR", "UHD", "GAME", "BT"], sound_mode: "STEREO", sound_mode_list: ["STEREO", "DOLBY_SURROUND", "DTS_NEURAL_X", "MCH_STEREO", "AURO_2D"] } },
+    "media_player.kodi": { attributes: { source_list: ["Movies", "TV"], source: "TV" } }, "select.tv_input": { state: "HDMI 2", attributes: { options: ["HDMI 1", "HDMI 2"] } } });
+  check("S1 default: the player's own source_list, current marked", eq(H.sourceMenu(SP({}), AVRS), { entity: "media_player.kodi", current: "TV", options: [{ value: "Movies", name: "Movies" }, { value: "TV", name: "TV" }] }));
+  check("S2 no source_list -> no button", H.sourceMenu(SP({}), states()) === null);
+  const s3 = H.sourceMenu(SP({ sources: { entity: "media_player.avr", include: ["UHD", "PVR"], rename: { UHD: "Kodi", PVR: "Apple TV" } } }), AVRS);
+  check("S3 other entity + include (order kept) + rename", eq(s3.options, [{ value: "UHD", name: "Kodi" }, { value: "PVR", name: "Apple TV" }]) && s3.current === "PVR", s3);
+  check("S4 exclude", eq(H.sourceMenu(SP({ sources: { entity: "media_player.avr", exclude: ["BT", "STB"] } }), AVRS).options.map((o) => o.value), ["PVR", "UHD", "GAME"]));
+  check("S5 include items as `value: label`", eq(H.sourceMenu(SP({ sources: { entity: "media_player.avr", include: [{ UHD: "Kodi" }, "GAME"] } }), AVRS).options, [{ value: "UHD", name: "Kodi" }, { value: "GAME", name: "GAME" }]));
+  check("S6 sources: false hides", H.sourceMenu(SP({ sources: false }), AVRS) === null);
+  check("S7 string shorthand = entity", H.sourceMenu(SP({ sources: "media_player.avr" }), AVRS).entity === "media_player.avr");
+  check("S8 select_source step", eq(H.optionSteps({}, "media_player.avr", "source", "UHD"), [["media_player", "select_source", { entity_id: "media_player.avr", source: "UHD" }]]));
+  check("S9 select entity -> select.select_option", eq(H.optionSteps({}, "select.tv_input", "source", "HDMI 1"), [["select", "select_option", { entity_id: "select.tv_input", option: "HDMI 1" }]]) &&
+    H.sourceMenu(SP({ sources: "select.tv_input" }), AVRS).current === "HDMI 2");
+  check("S10 custom action with $value", eq(H.optionSteps({ action: { service: "script.avr_source", data: { source: "$value" } } }, "media_player.avr", "source", "UHD"), [["script", "avr_source", { source: "UHD" }]]));
+  check("S11 validation", bad({ players: [{ entity: "media_player.k", sources: { include: "UHD" } }] }) && bad({ players: [{ entity: "media_player.k", sources: 5 }] }));
+
+  // ---- M: sound mode ---------------------------------------------------------------------
+  const m1 = H.soundModeMenu(SP({}), AVRS);
+  check("M1 default entity = volume_entity, its sound_mode_list", m1.entity === "media_player.avr" && m1.options.length === 5 && m1.current === "STEREO");
+  check("M2 modes + rename", eq(H.soundModeMenu(SP({ sound_mode: { modes: [{ STEREO: "Stereo" }, { DOLBY_SURROUND: "Dolby Surround" }] } }), AVRS).options, [{ value: "STEREO", name: "Stereo" }, { value: "DOLBY_SURROUND", name: "Dolby Surround" }]));
+  check("M3 hide", H.soundModeMenu(SP({ sound_mode: { hide: true } }), AVRS) === null && H.soundModeMenu(SP({ sound_mode: false }), AVRS) === null);
+  check("M4 select_sound_mode step", eq(H.optionSteps({}, "media_player.avr", "sound_mode", "DTS_NEURAL_X"), [["media_player", "select_sound_mode", { entity_id: "media_player.avr", sound_mode: "DTS_NEURAL_X" }]]));
+  check("M5 no list -> none", H.soundModeMenu(SP({ volume_entity: "media_player.lr_tv" }), AVRS) === null);
+
+  // ---- O: more menu + channels -----------------------------------------------------------
+  const ids = (p) => H.moreItems(p, AVRS).map((i) => i.id);
+  check("O1 Kodi default more items", eq(ids(SP({})), ["info", "subtitles", "subtitles_hold", "audio_track", "sound_mode", "osd", "context_menu"]), ids(SP({})));
+  check("O2 sound mode item only when available", !ids(SP({ sound_mode: false })).includes("sound_mode"));
+  check("O3 custom list incl. a service item", eq(H.moreItems(SP({ more: ["info", { name: "Lights", service: "scene.turn_on", target: { entity_id: "scene.movie" } }] }), AVRS).map((i) => [i.name, i.steps]),
+    [["Info", [["kodi", "call_method", { entity_id: "media_player.kodi", method: "Input.Info" }]]], ["Lights", [["scene", "turn_on", { entity_id: "scene.movie" }]]]]));
+  check("O4 more: false", H.moreItems(SP({ more: false }), AVRS).length === 0);
+  check("O5 validation of more", bad({ players: [{ entity: "media_player.k", more: [{ name: "x" }] }] }) && bad({ players: [{ entity: "media_player.k", more: "info" }] }));
+  check("O6 channels: Apple TV + LG on, Kodi off unless asked", H.hasChannels(H.normaliseConfig(CONFIG()).players[0]) && H.hasChannels(H.normaliseConfig(CONFIG()).players[2]) && !H.hasChannels(SP({})) && H.hasChannels(SP({ channels: true })));
+  check("O7 LG channel keys", eq(H.stepsFor(H.normaliseConfig(CONFIG()).players[2], "channel_up", states()), [["webostv", "button", { entity_id: "media_player.lr_tv", button: "CHANNELUP" }]]));
+
+  // DOM: bottom row, menus
+  w.localStorage.clear();
+  const dcfg = CONFIG(); dcfg.players[1].sources = { entity: "media_player.avr", include: [{ UHD: "Kodi" }, { PVR: "Apple TV" }] };
+  m = mount(w, dcfg, AVRS);
+  check("O8 bottom row order: sources | -10 | ... | +10 | CH", eq([...m.$(".inner").children].map((e) => e.className.split(" ")[0] || e.dataset.key), ["src", "skip_back", "more", "skip_fwd", "ch"]));
+  check("O9 Kodi: CH slot hidden, sources + more shown", m.$(".ch").classList.contains("gone") && !m.$(".src").classList.contains("gone") && !m.$(".more").classList.contains("gone"));
+  check("O10 no separate info/subtitle buttons, mic still on the right edge", !m.$('.inner [data-key="info"]') && !!m.$(".mic"));
+  m.$(".src").click(); await sleep(10);
+  const mis = [...m.card.shadowRoot.querySelectorAll(".menu .mi")];
+  check("O11 sources menu lists renamed sources, ticks the current one", m.$(".menu-bg").classList.contains("show") && eq(mis.map((b) => b.textContent), ["Kodi", "\u2713Apple TV"]), mis.map((b) => b.textContent));
+  mis[0].click(); await sleep(10);
+  check("O12 tap -> select_source on the AVR, menu closes", eq(m.hass.calls, [["media_player", "select_source", { entity_id: "media_player.avr", source: "UHD" }]]) && !m.$(".menu-bg").classList.contains("show"), m.hass.calls);
+  // badge long-press -> sound mode
+  const badge = m.$(".badge");
+  ptr(w, badge, "pointerdown"); await sleep(560); ptr(w, badge, "pointerup");
+  const smi = [...m.card.shadowRoot.querySelectorAll(".menu .mi")];
+  check("O13 hold speaker badge -> sound mode menu", m.$(".menu .mt").textContent === "Sound Mode" && smi.length === 5 && /\u2713STEREO/.test(smi[0].textContent));
+  smi[2].click(); await sleep(10);
+  check("O14 -> select_sound_mode", eq(m.hass.calls[1], ["media_player", "select_sound_mode", { entity_id: "media_player.avr", sound_mode: "DTS_NEURAL_X" }]), m.hass.calls);
+  ptr(w, badge, "pointerdown"); await sleep(100); ptr(w, badge, "pointerup"); await sleep(10);
+  check("O15 a short tap on the badge does nothing", !m.$(".menu-bg").classList.contains("show") && m.hass.calls.length === 2);
+  // more -> sound mode, more -> info
+  m.$(".more").click(); await sleep(10);
+  const more = [...m.card.shadowRoot.querySelectorAll(".menu .mi")];
+  check("O16 more menu (Kodi)", eq(more.map((b) => b.textContent), ["Info", "Subtitles", "Next subtitle", "Audio Track", "Sound Mode", "Player Controls", "Context Menu"]), more.map((b) => b.textContent));
+  more[4].click(); await sleep(10);
+  check("O17 more > Sound Mode opens the sound mode menu", m.$(".menu-bg").classList.contains("show") && m.$(".menu .mt").textContent === "Sound Mode");
+  m.$(".menu-bg").click(); m.$(".more").click(); await sleep(10);
+  m.card.shadowRoot.querySelectorAll(".menu .mi")[0].click(); await sleep(10);
+  check("O18 more > Info sends Input.Info", eq(m.hass.calls.slice(-1)[0], ["kodi", "call_method", { entity_id: "media_player.kodi", method: "Input.Info" }]));
+  ptr(w, m.$(".tab[data-key=\"volume_up\"]"), "pointerdown"); await sleep(700); ptr(w, m.$(".tab[data-key=\"volume_up\"]"), "pointerup");
+  check("O19 + tab still repeats while held", m.hass.calls.filter((c) => c[1] === "volume_up").length >= 2);
+  m.card.remove();
 
   // URL pick (Sidebar Mini Player remote_path: /remote?player={entity})
   w.localStorage.clear();

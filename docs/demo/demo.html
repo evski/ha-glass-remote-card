@@ -11,7 +11,7 @@ const states = {
   "media_player.kodi": { state: q.get("kodi") || "playing", attributes: { friendly_name: "Kodi", media_series_title: "The Night Garden", media_title: "Episode 3", entity_picture: "poster.jpg" }, last_changed: t(5) },
   "media_player.living_room_tv": { state: "on", attributes: { friendly_name: "Living Room TV", source: q.get("src") || "HDMI 2" }, last_changed: t(60) },
   "media_player.bedroom_apple_tv": { state: "off", attributes: { friendly_name: "Bedroom Apple TV" }, last_changed: t(600) },
-  "media_player.receiver": { state: "on", attributes: { friendly_name: "Receiver", is_volume_muted: false }, last_changed: t(60) },
+  "media_player.receiver": { state: "on", attributes: { friendly_name: "Receiver", is_volume_muted: false, source: "UHD", source_list: ["STB", "PVR", "UHD", "GAME", "BT"], sound_mode: "DOLBY_SURROUND", sound_mode_list: ["STEREO", "DOLBY_SURROUND", "DTS_NEURAL_X", "MCH_STEREO"] }, last_changed: t(60) },
   "binary_sensor.living_room_apple_tv_keyboard_focus": { state: q.get("kbd") || "off", attributes: {} },
 };
 const hass = { states, callService: (d, s, data) => { console.log("call", d, s, JSON.stringify(data)); return Promise.resolve(); } };
@@ -21,7 +21,9 @@ card.setConfig({
   players: [
     { entity: "media_player.living_room_apple_tv", platform: "apple_tv", remote: "remote.living_room_apple_tv", config_entry_id: "x",
       volume_entity: "media_player.receiver", keyboard_sensor: "binary_sensor.living_room_apple_tv_keyboard_focus" },
-    { entity: "media_player.kodi", platform: "kodi", volume_entity: "media_player.receiver" },
+    { entity: "media_player.kodi", platform: "kodi", volume_entity: "media_player.receiver",
+      sources: { entity: "media_player.receiver", include: [{ UHD: "Kodi" }, { PVR: "Apple TV" }, { GAME: "Games" }, { BT: "Bluetooth" }] },
+      sound_mode: { modes: [{ STEREO: "Stereo" }, { DOLBY_SURROUND: "Dolby Surround" }, { DTS_NEURAL_X: "DTS Neural:X" }, { MCH_STEREO: "Multichannel Stereo" }] } },
     { entity: "media_player.living_room_tv", platform: "webostv", volume_entity: "media_player.receiver" },
     { entity: "media_player.bedroom_apple_tv", platform: "apple_tv", remote: "remote.bedroom_apple_tv", volume_via_remote: true },
   ],

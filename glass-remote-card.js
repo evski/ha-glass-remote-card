@@ -9,7 +9,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "0.1.0";
+  const VERSION = "0.1.1";
   const TAG = "glass-remote-card";
   const PICK_KEY = "glass-remote-card:pick:";
 
@@ -39,6 +39,14 @@
     info: svg('<circle cx="12" cy="12" r="9"/><path d="M12 11v6M10.4 11H12M10.4 17h3.2"/><circle cx="12" cy="7.7" r="0.4"/>'),
     subtitles: svg('<path d="M5 4.8h14a2 2 0 0 1 2 2v8.3a2 2 0 0 1-2 2h-8l-4 3.4v-3.4H5a2 2 0 0 1-2-2V6.8a2 2 0 0 1 2-2z"/><path d="M6.8 9.7h3M12 9.7h5.2M6.8 13h6M15 13h2.2"/>', 1.4),
     keyboard: svg('<rect x="2.3" y="6" width="19.4" height="12" rx="2"/><path d="M6 9.5h0M9 9.5h0M12 9.5h0M15 9.5h0M18 9.5h0M6 12.4h0M9 12.4h0M12 12.4h0M15 12.4h0M18 12.4h0M8 15.3h8" stroke-width="1.5"/>', 1.4),
+    list: svg('<path d="M8.6 6.5h12M8.6 12h12M8.6 17.5h12" stroke-width="1.5"/><circle cx="4" cy="6.5" r=".55" fill="currentColor"/><circle cx="4" cy="12" r=".55" fill="currentColor"/><circle cx="4" cy="17.5" r=".55" fill="currentColor"/>'),
+    more: svg('<circle cx="12" cy="12" r="9.2"/><circle cx="7.9" cy="12" r=".45" fill="currentColor"/><circle cx="12" cy="12" r=".45" fill="currentColor"/><circle cx="16.1" cy="12" r=".45" fill="currentColor"/>', 1.5),
+    chev_up: '<svg viewBox="3 5.5 18 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 10.5c2.5-2 4.7-3 7-3s4.5 1 7 3"/></svg>',
+    chev_down: '<svg viewBox="3 11.5 18 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 13.5c2.5 2 4.7 3 7 3s4.5-1 7-3"/></svg>',
+    sound_mode: svg('<path d="M4 9.5v5M8 6.5v11M12 4v16M16 7.5v9M20 10v4"/>', 1.6),
+    control_center: svg('<rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="3.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="3.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/>', 1.4),
+    settings: svg('<circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/>', 1.4),
+    audio: svg('<path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>', 1.4),
     plus: svg('<path d="M12 7v10M7 12h10"/>', 2),
     minus: svg('<path d="M7 12h10"/>', 2),
     chevron: svg('<path d="M9 5.5 15.5 12 9 18.5"/>', 2),
@@ -47,6 +55,20 @@
     exit: svg('<path d="M14 4.5H6.5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2H14M10 12h10M16.5 8.5 20 12l-3.5 3.5"/>'),
     close: svg('<path d="M6 6l12 12M18 6 6 18"/>', 1.8),
   };
+
+  // Siri Remote glyph for the keyboard banner's app icon (filled, like the iOS notification).
+  const REMOTE_GLYPH = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8.2" y="1.8" width="7.6" height="20.4" rx="2.6" fill="#fff"/>' +
+    '<circle cx="12" cy="6.4" r="2.5" fill="#2c2c2e"/><circle cx="12" cy="6.4" r="0.9" fill="#fff"/>' +
+    '<circle cx="10.4" cy="11.4" r="0.85" fill="#2c2c2e"/><circle cx="13.6" cy="11.4" r="0.85" fill="#2c2c2e"/>' +
+    '<circle cx="10.4" cy="14.2" r="0.85" fill="#2c2c2e"/><circle cx="13.6" cy="14.2" r="0.85" fill="#2c2c2e"/>' +
+    '<rect x="11.3" y="16.3" width="1.4" height="3.2" rx=".7" fill="#2c2c2e"/></svg>';
+
+  /** Banner text for the "wants text" notification, worded like iOS's Apple TV keyboard alert. */
+  function bannerText(p, name, ios) {
+    const kb = ios ? "iOS keyboard" : "keyboard";
+    const where = { apple_tv: "your Apple TV", kodi: "Kodi", webostv: "your LG TV" }[p.platform] || name;
+    return { title: `${name} Keyboard`, line2: "Keyboard Input", body: `Enter text on ${where} using your ${kb}. Press to type.` };
+  }
 
   const OFF_STATES = ["off", "unavailable", "unknown", "standby"];
   const RANK = { playing: 3, paused: 2, on: 1, idle: 1, buffering: 1 };
@@ -75,13 +97,19 @@
         skip_back: (p) => rc(p, "skip_backward"), skip_fwd: (p) => rc(p, "skip_forward"),
         // tvOS has no separate info/subtitle key: swipe-down opens the info panel (Info / Subtitles / Audio).
         info: (p) => rc(p, "down"), subtitles: (p) => rc(p, "down"),
+        // Power: media_player.turn_on/turn_off (pyatv's power API). Never remote.send_command
+        // turn_off/suspend: with hold_secs that raises "turn_off() got an unexpected keyword argument 'action'".
         power: (p, st) => mp(p, isOff(st) ? "turn_on" : "turn_off"),
+        channel_up: (p) => rc(p, "channel_up"), channel_down: (p) => rc(p, "channel_down"),
+        control_center: (p) => rc(p, "control_center"), top_menu: (p) => rc(p, "top_menu"),
         remote_volume_up: (p) => rc(p, "volume_up"), remote_volume_down: (p) => rc(p, "volume_down"),
       },
       text: (p, text) => p.config_entry_id
         ? [["apple_tv", "set_keyboard_text", { config_entry_id: p.config_entry_id, text }]] : [],
       textLive: true,
       needsRemote: true,
+      channels: true,
+      more: ["info", "subtitles", "sound_mode", "control_center", "top_menu"],
     },
     kodi: {
       label: "Kodi",
@@ -100,9 +128,17 @@
         subtitles: (p) => kodi(p, "Input.ExecuteAction", { action: "showsubtitles" }),
         subtitles_hold: (p) => kodi(p, "Input.ExecuteAction", { action: "nextsubtitle" }),
         power: (p) => kodi(p, "GUI.ActivateWindow", { window: "shutdownmenu" }),
+        audio_track: (p) => kodi(p, "Input.ExecuteAction", { action: "audionextlanguage" }),
+        context_menu: (p) => kodi(p, "Input.ContextMenu"),
+        osd: (p) => kodi(p, "Input.ShowOSD"),
+        // only shown with `channels: true` (Kodi PVR)
+        channel_up: (p) => kodi(p, "Input.ExecuteAction", { action: "channelup" }),
+        channel_down: (p) => kodi(p, "Input.ExecuteAction", { action: "channeldown" }),
       },
       text: (p, text, done) => [kodi(p, "Input.SendText", { text, done: !!done })],
       textLive: false,
+      channels: false,
+      more: ["info", "subtitles", "subtitles_hold", "audio_track", "sound_mode", "osd", "context_menu"],
     },
     webostv: {
       label: "LG webOS",
@@ -116,11 +152,15 @@
         skip_back: (p) => lg(p, "REWIND"), skip_fwd: (p) => lg(p, "FASTFORWARD"),
         info: (p) => lg(p, "INFO"), subtitles: (p) => lg(p, "CC"),
         power: (p, st) => mp(p, isOff(st) ? "turn_on" : "turn_off"),
+        channel_up: (p) => lg(p, "CHANNELUP"), channel_down: (p) => lg(p, "CHANNELDOWN"),
+        settings: (p) => lg(p, "MENU"), exit: (p) => lg(p, "EXIT"),
       },
       text: (p, text, done) => done
         ? [["webostv", "command", { entity_id: p.entity, command: "com.webos.service.ime/sendEnterKey" }]]
         : [["webostv", "command", { entity_id: p.entity, command: "com.webos.service.ime/insertText", payload: { text, replace: 1 } }]],
       textLive: true,
+      channels: true,
+      more: ["info", "subtitles", "sound_mode", "settings", "exit"],
     },
     generic: {
       label: "Media player",
@@ -135,9 +175,12 @@
         skip_back: (p) => mp(p, "media_previous_track"), skip_fwd: (p) => mp(p, "media_next_track"),
         info: (p) => p.remote ? rc(p, "info") : null, subtitles: () => null,
         power: (p, st) => mp(p, isOff(st) ? "turn_on" : "turn_off"),
+        channel_up: (p) => p.remote ? rc(p, "channel_up") : null, channel_down: (p) => p.remote ? rc(p, "channel_down") : null,
       },
       text: () => [],
       textLive: false,
+      channels: false,
+      more: ["info", "subtitles", "sound_mode"],
     },
   };
 
@@ -156,6 +199,17 @@
       if (!PLATFORMS[p.platform]) throw new Error(`glass-remote-card: players[${i}].platform must be one of ${Object.keys(PLATFORMS).join(", ")}`);
       if (PLATFORMS[p.platform].needsRemote && !p.remote)
         throw new Error(`glass-remote-card: players[${i}] (apple_tv) needs a remote: entity (remote.xxx)`);
+      if (p.input) p.input = normaliseInputs(p.input, i);
+      for (const k of ["sources", "sound_mode"]) if (p[k] !== undefined) p[k] = normaliseOptionMenu(p[k], `players[${i}].${k}`);
+      if (p.more !== undefined && p.more !== false && p.more !== true) {
+        if (!Array.isArray(p.more)) throw new Error(`glass-remote-card: players[${i}].more must be a list (or false)`);
+        p.more.forEach((m, j) => {
+          if (typeof m === "string") return;
+          if (!m || typeof m !== "object" || !m.name || !(m.key || m.service || m.action))
+            throw new Error(`glass-remote-card: players[${i}].more[${j}] needs a name and a key or service`);
+        });
+      }
+      if (p.channels !== undefined && typeof p.channels !== "boolean") throw new Error(`glass-remote-card: players[${i}].channels must be true or false`);
       return p;
     });
     const out = {
@@ -165,6 +219,159 @@
     if (!["fullscreen", "card"].includes(out.layout)) throw new Error("glass-remote-card: layout must be fullscreen or card");
     return out;
   }
+
+  // ---------------------------------------------------------------------------
+  // Input switching: put an AVR / soundbar / TV on the right input before a key is sent.
+  // ---------------------------------------------------------------------------
+  const INPUT_KEYS = ["home", "power", "select", "back", "play_pause", "up", "down", "left", "right",
+    "skip_back", "skip_fwd", "info", "subtitles", "channel_up", "channel_down", "volume_up", "volume_down", "mute", "text"];
+  const INPUT_DEFAULTS = { turn_on: false, turn_on_delay: 1500, triggers: ["home"], skip_if_selected: true, delay: 0 };
+
+  function normaliseInputs(raw, i) {
+    const list = Array.isArray(raw) ? raw : [raw];
+    return list.map((inp, j) => {
+      const where = `glass-remote-card: players[${i}].input${Array.isArray(raw) ? `[${j}]` : ""}`;
+      if (!inp || typeof inp !== "object" || !inp.entity) throw new Error(`${where}.entity is required`);
+      if (inp.source == null && !inp.action) throw new Error(`${where} needs a source (or a custom action)`);
+      const o = { ...INPUT_DEFAULTS, ...inp };
+      o.triggers = (Array.isArray(o.triggers) ? o.triggers : [o.triggers]).map(String);
+      for (const t of o.triggers) {
+        if (!INPUT_KEYS.includes(t) && t !== "any" && t !== "first")
+          throw new Error(`${where}.triggers: "${t}" isn't one of ${INPUT_KEYS.join(", ")}, any, first`);
+      }
+      for (const k of ["turn_on_delay", "delay"]) {
+        if (typeof o[k] !== "number" || o[k] < 0) throw new Error(`${where}.${k} must be a number of milliseconds`);
+      }
+      return o;
+    });
+  }
+
+  /**
+   * Steps that switch inputs before `key` on player `p`. A ["wait", ms] step pauses the sequence.
+   * firstPress = this is the first button pressed since the card started controlling this player.
+   */
+  function inputSteps(p, key, states, firstPress = false) {
+    const out = [];
+    const base = String(key).replace(/_hold$/, "");
+    for (const inp of p.input || []) {
+      const t = inp.triggers;
+      if (!(t.includes(base) || t.includes("any") || (t.includes("first") && firstPress))) continue;
+      const st = states[inp.entity];
+      if (!st || st.state === "unavailable" || st.state === "unknown") continue; // nothing we can do
+      const off = OFF_STATES.includes(st.state);
+      if (off && !inp.turn_on) continue; // switching an off device does nothing; enable turn_on for that
+      if (!off && inp.skip_if_selected && inp.source != null && st.attributes && st.attributes.source === inp.source) continue;
+      if (off) {
+        out.push(["media_player", "turn_on", { entity_id: inp.entity }]);
+        if (inp.turn_on_delay) out.push(["wait", inp.turn_on_delay]);
+      }
+      if (inp.action) {
+        const acts = Array.isArray(inp.action) ? inp.action : [inp.action];
+        for (const a of acts) {
+          const [domain, service] = String(a.service || a.action || "").split(".");
+          out.push([domain, service, substSource({ ...(a.data || a.service_data || {}), ...(a.target || {}) }, inp.source)]);
+        }
+      } else {
+        out.push(["media_player", "select_source", { entity_id: inp.entity, source: inp.source }]);
+      }
+      if (inp.delay) out.push(["wait", inp.delay]);
+    }
+    return out;
+  }
+  const substSource = (v, src) => v === "$source" ? src : Array.isArray(v) ? v.map((x) => substSource(x, src))
+    : v && typeof v === "object" ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, substSource(x, src)])) : v;
+
+  // ---------------------------------------------------------------------------
+  // Option menus: sources (list button) and sound modes (speaker badge / More menu).
+  // ---------------------------------------------------------------------------
+  function normaliseOptionMenu(raw, where) {
+    if (raw === false) return { hide: true };
+    if (raw === true || raw == null) return {};
+    if (typeof raw === "string") return { entity: raw };
+    if (typeof raw !== "object") throw new Error(`glass-remote-card: ${where} must be an entity id, an object or false`);
+    const o = { ...raw };
+    if (o.modes && !o.include) o.include = o.modes; // `modes:` reads better for sound modes
+    delete o.modes;
+    for (const k of ["include", "exclude"]) if (o[k] != null && !Array.isArray(o[k])) throw new Error(`glass-remote-card: ${where}.${k} must be a list`);
+    if (o.rename != null && (typeof o.rename !== "object" || Array.isArray(o.rename))) throw new Error(`glass-remote-card: ${where}.rename must be a map of value: label`);
+    if (o.include) { // allow `- STEREO: Stereo` items as include + rename in one
+      o.rename = { ...(o.rename || {}) };
+      o.include = o.include.map((x) => {
+        if (x && typeof x === "object") { const [k, v] = Object.entries(x)[0] || []; if (k != null) o.rename[k] = v; return k; }
+        return String(x);
+      });
+    }
+    return o;
+  }
+
+  /** Build a menu {entity, current, options:[{value,name}]} from an entity's list attribute, or null. */
+  function optionMenu(cfg, entity, states, listAttr, curAttr) {
+    if (!cfg || cfg.hide || !entity) return null;
+    const st = states[entity];
+    const isSelect = /^(input_)?select\./.test(entity);
+    const a = (st && st.attributes) || {};
+    let list = isSelect ? a.options : a[listAttr];
+    list = Array.isArray(list) ? list.map(String) : [];
+    if (cfg.include) list = cfg.include.slice();
+    if (cfg.exclude) list = list.filter((v) => !cfg.exclude.includes(v));
+    if (!list.length) return null;
+    const ren = cfg.rename || {};
+    return {
+      entity, current: st ? (isSelect ? st.state : a[curAttr]) : undefined,
+      options: list.map((v) => ({ value: v, name: ren[v] != null ? String(ren[v]) : v })),
+    };
+  }
+  const sourceMenu = (p, states) => optionMenu(p.sources || {}, (p.sources && p.sources.entity) || p.entity, states, "source_list", "source");
+  const soundModeMenu = (p, states) => optionMenu(p.sound_mode || {}, (p.sound_mode && p.sound_mode.entity) || p.volume_entity || p.entity, states, "sound_mode_list", "sound_mode");
+
+  /** Steps to choose `value` in a menu. kind: "source" | "sound_mode". */
+  function optionSteps(cfg, entity, kind, value) {
+    cfg = cfg || {};
+    if (cfg.action) {
+      const acts = Array.isArray(cfg.action) ? cfg.action : [cfg.action];
+      return acts.map((a) => {
+        const [domain, service] = String(a.service || a.action || "").split(".");
+        const sub = (v) => v === "$value" || v === "$source" || v === "$mode" ? value : Array.isArray(v) ? v.map(sub)
+          : v && typeof v === "object" ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, sub(x)])) : v;
+        return [domain, service, sub({ ...(a.data || a.service_data || {}), ...(a.target || {}) })];
+      });
+    }
+    if (/^input_select\./.test(entity)) return [["input_select", "select_option", { entity_id: entity, option: value }]];
+    if (/^select\./.test(entity)) return [["select", "select_option", { entity_id: entity, option: value }]];
+    return kind === "source"
+      ? [["media_player", "select_source", { entity_id: entity, source: value }]]
+      : [["media_player", "select_sound_mode", { entity_id: entity, sound_mode: value }]];
+  }
+
+  const MORE_LABELS = {
+    info: ["Info", "info"], subtitles: ["Subtitles", "subtitles"], subtitles_hold: ["Next subtitle", "subtitles"],
+    sound_mode: ["Sound Mode", "sound_mode"], sources: ["Sources", "list"], control_center: ["Control Center", "control_center"],
+    top_menu: ["Top Menu", "home"], audio_track: ["Audio Track", "audio"], osd: ["Player Controls", "play_pause"],
+    context_menu: ["Context Menu", "list"], settings: ["Settings", "settings"], exit: ["Exit App", "back"],
+  };
+  /** Items of the "..." menu: [{id, name, icon, steps?, open?}], only those that do something on this player. */
+  function moreItems(p, states) {
+    if (p.more === false) return [];
+    const list = Array.isArray(p.more) ? p.more : PLATFORMS[p.platform].more || [];
+    const out = [];
+    list.forEach((m, i) => {
+      if (typeof m === "string") {
+        const [name, ic] = MORE_LABELS[m] || [m.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()), null];
+        if (m === "sound_mode" || m === "sources") {
+          if ((m === "sound_mode" ? soundModeMenu : sourceMenu)(p, states)) out.push({ id: m, name, icon: ic, open: m });
+          return;
+        }
+        const steps = stepsFor(p, m, states);
+        if (steps.length) out.push({ id: m, name, icon: ic, steps });
+        return;
+      }
+      const steps = m.key ? stepsFor(p, m.key, states) : stepsFor({ ...p, actions: { __more: m } }, "__more", states);
+      if (steps.length) out.push({ id: "custom" + i, name: String(m.name), icon: m.icon || null, steps });
+    });
+    return out;
+  }
+  const hasChannels = (p) => !!(p.channels === undefined ? PLATFORMS[p.platform].channels : p.channels) &&
+    !!(PLATFORMS[p.platform].keys.channel_up || (p.actions && p.actions.channel_up));
 
   function guessPlatform(p) {
     if (p.remote && /apple|atv/i.test(p.entity + p.remote)) return "apple_tv";
@@ -316,19 +523,60 @@
     .vol { position: absolute; left: -9px; top: 10%; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; z-index: 2; }
     .tab { width: 22px; height: 58px; border-radius: 12px; display: grid; place-items: center; --s: 13px; }
     .tab .icon { opacity: .6; }
-    .badge { width: 30px; height: 30px; margin-left: 17px; border-radius: 50%; display: grid; place-items: center; --s: 15px; pointer-events: none; }
+    .badge { width: 30px; height: 30px; margin-left: 17px; border-radius: 50%; display: grid; place-items: center; --s: 15px; -webkit-touch-callout: none; user-select: none; }
+    .badge.inert { pointer-events: none; }
     .mic { position: absolute; right: 10px; top: calc(10% + 54px); width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; --s: 19px; z-index: 2; }
-    .inner { position: absolute; left: 14px; right: 14px; bottom: 12px; display: flex; justify-content: space-between; z-index: 2; }
-    .inner button { padding: 7px; --s: 32px; }
-    .inner .dim { opacity: .55; }
+    /* bottom row inside the pad, like Apple's during playback: sources | -10 | ... | +10 | CH */
+    .inner { position: absolute; left: 6px; right: 6px; bottom: 10px; display: grid; grid-template-columns: repeat(5, 1fr); justify-items: center; align-items: center; z-index: 2; }
+    .inner > button { padding: 7px; --s: 30px; }
+    .inner .src, .inner .more { --s: 28px; opacity: .9; }
+    .inner .gone { visibility: hidden; pointer-events: none; }
+    .ch { display: flex; flex-direction: column; align-items: center; line-height: 1; }
+    .ch button { width: 40px; height: 18px; padding: 0; display: grid; place-items: center; }
+    .ch button svg { width: 22px; height: 9px; display: block; }
+    .ch span { font-size: 15px; font-weight: 600; letter-spacing: .3px; margin: 1px 0; pointer-events: none; }
+
+    /* glass pop-up menu (sources, sound mode, more) */
+    .menu-bg { position: fixed; inset: 0; z-index: 30; display: none; }
+    .menu-bg.show { display: block; }
+    .menu { position: fixed; width: min(270px, calc(100vw - 20px)); max-height: 56vh; overflow-y: auto; overscroll-behavior: contain;
+      border-radius: 22px; padding: 6px 0; color: #fff; background: rgba(44,44,48,.80); border: 1px solid rgba(255,255,255,.10);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 18px 48px rgba(0,0,0,.6);
+      -webkit-backdrop-filter: blur(30px) saturate(180%); backdrop-filter: blur(30px) saturate(180%);
+      transform: scale(.85); opacity: 0; transition: transform .22s cubic-bezier(.2,.9,.3,1.15), opacity .15s; }
+    .menu-bg.show .menu.in { transform: none; opacity: 1; }
+    .menu .mt { padding: 8px 16px 6px; font-size: 13px; color: rgba(235,235,245,.6); }
+    .menu .mi { width: 100%; display: flex; align-items: center; gap: 10px; padding: 11px 16px; font-size: 16px; text-align: left; --s: 20px;
+      border-top: .5px solid rgba(255,255,255,.08); }
+    .menu .mt + .mi, .menu .mi:first-child { border-top: none; }
+    .menu .mi:active { background: rgba(255,255,255,.10); }
+    .menu .mi .ck { width: 16px; flex: 0 0 16px; font-weight: 600; }
+    .menu .mi .nm { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .menu .mi .icon { opacity: .9; }
 
     .bottom { flex: 0 0 auto; margin-top: auto; padding-top: 28px; display: flex; align-items: center; justify-content: space-between; padding-left: 4px; padding-right: 4px; }
     .bottom .side { width: 82px; height: 82px; border-radius: 50%; display: grid; place-items: center; --s: 34px; }
     .bottom .big { width: 106px; height: 106px; border-radius: 50%; display: grid; place-items: center; --s: 44px; }
 
-    .wants { position: absolute; left: 8px; right: 8px; top: 8px; z-index: 3; display: none; align-items: center; gap: 10px;
-      padding: 12px 18px; border-radius: 26px; background: var(--grc-accent); color: #fff; font-weight: 600; font-size: 15px; --s: 24px; }
-    .wants.show { display: flex; }
+    /* "wants text": an iOS-style notification banner that slides down over the top row */
+    .wants { position: absolute; z-index: 6; left: calc(10px + env(safe-area-inset-left, 0px)); right: calc(10px + env(safe-area-inset-right, 0px));
+      top: calc(max(env(safe-area-inset-top, 0px), 8px) + 2px); display: flex; align-items: center; gap: 12px; text-align: left;
+      padding: 12px 16px 12px 12px; border-radius: 24px; color: #fff;
+      background: rgba(58,58,62,.72); border: 1px solid rgba(255,255,255,.10);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 12px 32px rgba(0,0,0,.55);
+      -webkit-backdrop-filter: blur(30px) saturate(180%); backdrop-filter: blur(30px) saturate(180%);
+      transform: translateY(calc(-100% - 80px)); opacity: 0; visibility: hidden;
+      transition: transform .45s cubic-bezier(.2,.9,.25,1.12), opacity .25s ease, visibility 0s linear .45s; }
+    .wants.show { transform: none; opacity: 1; visibility: visible; transition: transform .45s cubic-bezier(.2,.9,.25,1.12), opacity .2s ease; }
+    .wants:active { filter: brightness(1.15); }
+    .root.card .wants { top: 8px; left: 8px; right: 8px; }
+    .root.card { position: relative; }
+    .wants .appicon { flex: 0 0 auto; width: 44px; height: 44px; border-radius: 11px; background: #1c1c1e; display: grid; place-items: center;
+      box-shadow: inset 0 0 0 .5px rgba(255,255,255,.18); }
+    .wants .appicon svg { width: 34px; height: 34px; }
+    .wants .txt { min-width: 0; display: flex; flex-direction: column; font-size: 15px; line-height: 1.25; }
+    .wants .t1, .wants .t2 { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .wants .t3 { font-weight: 400; color: rgba(255,255,255,.92); }
 
     .sheet-bg { position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,.55); display: none; align-items: flex-end; justify-content: center;
       -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
@@ -414,23 +662,41 @@
       if (!this._config.haptics) return;
       window.dispatchEvent(new CustomEvent("haptic", { detail: kind })); // picked up by the HA companion apps
     }
+    /** Run steps in order. Waits (["wait", ms]) and input switches are awaited so the key lands
+     *  after the receiver has changed input; plain key presses don't wait on each other. */
     _call(steps) {
-      if (!this._hass || !steps) return;
-      for (const [domain, service, data] of steps) {
-        if (!domain || !service) continue;
-        try { const r = this._hass.callService(domain, service, data); if (r && r.catch) r.catch((e) => console.warn(TAG, domain + "." + service, e)); }
-        catch (e) { console.warn(TAG, e); }
-      }
+      if (!this._hass || !steps || !steps.length) return Promise.resolve();
+      const hasWait = steps.some((s) => s[0] === "wait");
+      const run = async () => {
+        for (const [domain, service, data] of steps) {
+          if (domain === "wait") { await new Promise((r) => { const t = setTimeout(() => { this._timers.delete(t); r(); }, service); this._timers.add(t); }); continue; }
+          if (!domain || !service) continue;
+          try {
+            const r = this._hass.callService(domain, service, data);
+            if (r && r.catch) { if (hasWait) await r.catch((e) => console.warn(TAG, domain + "." + service, e)); else r.catch((e) => console.warn(TAG, domain + "." + service, e)); }
+          } catch (e) { console.warn(TAG, e); }
+        }
+      };
+      return run();
     }
     press(key) {
-      const p = this.activePlayer; if (!p) return;
+      const p = this.activePlayer; if (!p) return Promise.resolve();
       this._haptic(key.endsWith("_hold") ? "medium" : "light");
-      this._call(stepsFor(p, key, this._states));
+      const keySteps = stepsFor(p, key, this._states);
+      if (!keySteps.length) return Promise.resolve();
+      const first = this._lastTarget !== p.entity || !this._pressedSinceTarget;
+      this._lastTarget = p.entity; this._pressedSinceTarget = true;
+      // while a switch is in flight, don't queue another one
+      const sw = this._switching ? [] : inputSteps(p, key, this._states, first);
+      if (!sw.length) return this._call(keySteps);
+      this._switching = true;
+      return this._call([...sw, ...keySteps]).finally(() => { this._switching = false; });
     }
     sendText(text, done) {
       const p = this.activePlayer; if (!p) return;
       const steps = (p.actions && p.actions.text) ? stepsFor(p, "text", this._states, text) : PLATFORMS[p.platform].text(p, text, done);
-      this._call(steps);
+      const sw = done || PLATFORMS[p.platform].textLive ? inputSteps(p, "text", this._states, false) : [];
+      this._call([...sw, ...steps]);
     }
 
     // ---- build -------------------------------------------------------------
@@ -440,6 +706,10 @@
       const root = this.shadowRoot;
       root.innerHTML = `<style>${CSS}</style>
         <div class="root ${c.layout}" style="--grc-pad-height:${esc(c.pad_height)};--grc-card-height:${esc(c.card_height)}">
+          <button class="wants" data-act="keyboard" aria-live="polite">
+            <span class="appicon">${REMOTE_GLYPH}</span>
+            <span class="txt"><span class="t1"></span><span class="t2">Keyboard Input</span><span class="t3"></span></span>
+          </button>
           <div class="top">
             <button class="circle glass" data-key="mute" aria-label="Mute">${icon("mute")}</button>
             <button class="pill glass" data-act="picker" aria-label="Choose device">
@@ -451,19 +721,19 @@
           </div>
           <div class="pad-wrap">
             <div class="pad" aria-label="Touchpad"><div class="ripple"></div></div>
-            <button class="wants" data-act="keyboard">${icon("keyboard")}<span class="wants-label"></span></button>
             <button class="kbd" data-act="keyboard" aria-label="Keyboard">${icon("keyboard")}</button>
             <div class="vol">
               <button class="tab glass" data-key="volume_up" data-repeat aria-label="Volume up">${icon("plus")}</button>
-              <span class="badge glass">${icon("speaker")}</span>
+              <button class="badge glass" aria-label="Sound mode (press and hold)">${icon("speaker")}</button>
               <button class="tab glass" data-key="volume_down" data-repeat aria-label="Volume down">${icon("minus")}</button>
             </div>
             <button class="mic glass" data-act="keyboard" aria-label="Dictate">${icon("mic")}</button>
             <div class="inner">
+              <button class="src" data-act="sources" aria-label="Sources">${icon("list")}</button>
               <button data-key="skip_back" aria-label="Back 10 seconds"><span class="icon ib"></span></button>
-              <button class="dim" data-key="info" aria-label="Info">${icon("info")}</button>
-              <button class="dim" data-key="subtitles" aria-label="Subtitles">${icon("subtitles")}</button>
+              <button class="more" data-act="more" aria-label="More">${icon("more")}</button>
               <button data-key="skip_fwd" aria-label="Forward 10 seconds"><span class="icon if"></span></button>
+              <div class="ch"><button data-key="channel_up" aria-label="Channel up">${ICONS.chev_up}</button><span>CH</span><button data-key="channel_down" aria-label="Channel down">${ICONS.chev_down}</button></div>
             </div>
           </div>
           <div class="bottom">
@@ -472,6 +742,7 @@
             <button class="side glass" data-key="home" aria-label="Home">${icon("home")}</button>
           </div>
         </div>
+        <div class="menu-bg"><div class="menu" role="menu"></div></div>
         <div class="sheet-bg picker"><div class="sheet"><h3>Control<button data-act="close" aria-label="Close">${icon("close")}</button></h3><div class="opts"></div></div></div>
         <div class="sheet-bg kb"><div class="sheet"><h3><span class="kb-title">Type</span><button data-act="close" aria-label="Close">${icon("close")}</button></h3>
           <textarea rows="2" placeholder="Tap here, then the keyboard mic to speak" autocapitalize="off" autocomplete="off" enterkeyhint="send"></textarea>
@@ -495,6 +766,81 @@
       });
       ta.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); this._act("kb-send"); } });
       this._wirePad(r.querySelector(".pad"));
+      // speaker badge: press and hold = sound mode menu (the +/- tabs keep hold-to-repeat)
+      const badge = r.querySelector(".badge");
+      let bt = null;
+      const bclear = () => { clearTimeout(bt); this._timers.delete(bt); bt = null; badge.classList.remove("pressed"); };
+      badge.addEventListener("pointerdown", (e) => {
+        if (e.button > 0) return;
+        badge.classList.add("pressed");
+        bt = setTimeout(() => { bclear(); this._haptic("medium"); this._openMenu("sound_mode", badge); }, 500);
+        this._timers.add(bt);
+      });
+      ["pointerup", "pointerleave", "pointercancel"].forEach((ev) => badge.addEventListener(ev, bclear));
+      badge.addEventListener("contextmenu", (e) => e.preventDefault());
+      badge.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); this._openMenu("sound_mode", badge); } });
+      const mbg = r.querySelector(".menu-bg");
+      mbg.addEventListener("click", (e) => { if (e.target === mbg) this._closeMenu(); });
+    }
+
+    // ---- glass pop-up menus -------------------------------------------------
+    _menuModel(kind) {
+      const p = this.activePlayer; if (!p) return null;
+      const st = this._states;
+      if (kind === "sources" || kind === "sound_mode") {
+        const m = kind === "sources" ? sourceMenu(p, st) : soundModeMenu(p, st);
+        if (!m) return null;
+        const cfg = kind === "sources" ? p.sources : p.sound_mode;
+        return { title: kind === "sources" ? "Sources" : "Sound Mode", items: m.options.map((o) => ({
+          name: o.name, sel: o.value === m.current,
+          run: () => this._call(optionSteps(cfg, m.entity, kind === "sources" ? "source" : "sound_mode", o.value)),
+        })) };
+      }
+      if (kind === "more") {
+        const items = moreItems(p, st);
+        if (!items.length) return null;
+        return { title: null, items: items.map((it) => ({
+          name: it.name, icon: it.icon,
+          run: it.open ? () => this._openMenu(it.open, this.shadowRoot.querySelector(".more")) : () => this._call(it.steps),
+        })) };
+      }
+      return null;
+    }
+    _openMenu(kind, anchor) {
+      const model = this._menuModel(kind); if (!model) return;
+      this._menu = model; this._menuKind = kind;
+      const r = this.shadowRoot, bg = r.querySelector(".menu-bg"), menu = r.querySelector(".menu");
+      const hasTick = model.items.some((i) => i.sel !== undefined);
+      menu.innerHTML = (model.title ? `<div class="mt">${esc(model.title)}</div>` : "") + model.items.map((it, i) =>
+        `<button class="mi" role="menuitem" data-i="${i}">${hasTick ? `<span class="ck">${it.sel ? "\u2713" : ""}</span>` : ""}<span class="nm">${esc(it.name)}</span>${it.icon && ICONS[it.icon] ? icon(it.icon) : ""}</button>`).join("");
+      menu.querySelectorAll(".mi").forEach((b) => b.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const it = this._menu && this._menu.items[+b.dataset.i]; if (!it) return;
+        this._haptic(); this._closeMenu(); it.run();
+      }));
+      menu.classList.remove("in");
+      bg.classList.add("show");
+      // place it next to the button: above it in the lower half of the screen, below it otherwise
+      const vw = window.innerWidth || 390, vh = window.innerHeight || 800;
+      const a = anchor ? anchor.getBoundingClientRect() : { left: vw / 2, right: vw / 2, top: vh / 2, bottom: vh / 2, width: 0 };
+      const mw = Math.min(270, vw - 20);
+      const left = Math.max(10, Math.min(vw - mw - 10, a.left + a.width / 2 - mw / 2));
+      menu.style.left = left + "px"; menu.style.top = ""; menu.style.bottom = "";
+      if (anchor && anchor.classList.contains("badge")) {
+        // beside the speaker badge, clear of the volume tabs
+        const mh = menu.offsetHeight || 200;
+        menu.style.left = Math.min(vw - mw - 10, a.right + 10) + "px";
+        menu.style.top = Math.max(10, Math.min(vh - mh - 10, a.top + a.height / 2 - mh / 2)) + "px";
+        menu.style.transformOrigin = "0 50%";
+      } else if (a.top > vh / 2) { menu.style.bottom = (vh - a.top + 8) + "px"; menu.style.transformOrigin = `${a.left + a.width / 2 - left}px 100%`; }
+      else { menu.style.top = (a.bottom + 8) + "px"; menu.style.transformOrigin = `${a.left + a.width / 2 - left}px 0`; }
+      const sel = menu.querySelector(".ck:not(:empty)");
+      if (sel && sel.parentElement.scrollIntoView) try { sel.parentElement.scrollIntoView({ block: "center" }); } catch (_) { /* jsdom */ }
+      requestAnimationFrame(() => menu.classList.add("in"));
+    }
+    _closeMenu() {
+      const r = this.shadowRoot; r.querySelector(".menu-bg").classList.remove("show"); r.querySelector(".menu").classList.remove("in");
+      this._menu = null; this._menuKind = null;
     }
 
     _debounce(name, fn, ms) {
@@ -567,6 +913,7 @@
       const r = this.shadowRoot;
       if (act === "picker") { this._haptic(); this._renderPicker(); r.querySelector(".picker").classList.add("show"); }
       else if (act === "close") this._closeSheets();
+      else if (act === "sources" || act === "more") { this._haptic(); this._openMenu(act, r.querySelector(act === "sources" ? ".src" : ".more")); }
       else if (act === "keyboard") {
         this._haptic();
         const p = this.activePlayer;
@@ -627,6 +974,7 @@
       const r = this.shadowRoot;
       const p = this.activePlayer;
       if (!p) return;
+      if (this._lastTarget !== p.entity) this._pressedSinceTarget = false;
       const st = this._states[p.entity];
       const np = nowPlaying({ ...p, name: this._friendly(p) }, st);
       const sig = [p.entity, np.title, np.subtitle, np.art].join("|");
@@ -648,17 +996,30 @@
       // "wants text" bar (Apple TV keyboard focus sensor, or any binary_sensor you point at)
       const ks = p.keyboard_sensor && this._states[p.keyboard_sensor];
       const wants = !!(ks && ks.state === "on");
+      const bt = bannerText(p, this._friendly(p), /iPhone|iPad|iPod/.test(navigator.userAgent || "") || /Home Assistant\/.*iOS/.test(navigator.userAgent || ""));
+      r.querySelector(".wants .t1").textContent = bt.title;
+      r.querySelector(".wants .t2").textContent = bt.line2;
+      r.querySelector(".wants .t3").textContent = bt.body;
       r.querySelector(".wants").classList.toggle("show", wants);
-      r.querySelector(".wants-label").textContent = `${this._friendly(p)} wants text \u2013 tap to type`;
       const textable = !!(PLATFORMS[p.platform].text(p, "x", false).length || (p.actions && p.actions.text));
       r.querySelector(".mic").style.display = textable ? "" : "none";
       r.querySelector(".kbd").style.display = textable ? "" : "none";
+      // bottom row: sources | -10 | ... | +10 | CH (each slot keeps its place when hidden)
+      r.querySelector(".src").classList.toggle("gone", !sourceMenu(p, this._states));
+      r.querySelector(".more").classList.toggle("gone", !moreItems(p, this._states).length);
+      r.querySelector(".ch").classList.toggle("gone", !hasChannels(p));
+      r.querySelector(".badge").classList.toggle("inert", !soundModeMenu(p, this._states));
+      if (this._menu && (this._menuKind === "sources" || this._menuKind === "sound_mode")) {
+        // keep the tick on the live value while open
+        const m = this._menuKind === "sources" ? sourceMenu(p, this._states) : soundModeMenu(p, this._states);
+        if (m) r.querySelectorAll(".menu .mi").forEach((b, i) => { const ck = b.querySelector(".ck"); const o = m.options[i]; if (ck && o) ck.textContent = o.value === m.current ? "\u2713" : ""; });
+      }
     }
   }
 
   // Exposed for tests and power users.
   GlassRemoteCard.VERSION = VERSION;
-  GlassRemoteCard.helpers = { normaliseConfig, choosePlayer, volumeTarget, nowPlaying, stepsFor, swipeDirection, guessPlatform, PLATFORMS, ICONS };
+  GlassRemoteCard.helpers = { sourceMenu, soundModeMenu, optionSteps, moreItems, hasChannels, bannerText, normaliseConfig, inputSteps, choosePlayer, volumeTarget, nowPlaying, stepsFor, swipeDirection, guessPlatform, PLATFORMS, ICONS };
 
   if (!customElements.get(TAG)) customElements.define(TAG, GlassRemoteCard);
   window.customCards = window.customCards || [];
