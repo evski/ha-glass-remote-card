@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.2] - unreleased
+
+### Added
+- Kodi keyboard detection: while Kodi is active and the card is visible, the card polls `GUI.GetProperties(currentwindow)` and listens for `kodi_call_method_result`. The keyboard banner shows for the virtual keyboard (10103) and the numeric input (10109). New options: `keyboard_poll` (ms, default 2000, 0 = off) and `keyboard_poll_during_video` (default false). Polling stops when the card is hidden or removed, another player is active or a video plays.
+
+- `input` trigger `pick`: picking a player in the picker (or with `?player=`) switches the room's AVR/TV to it, skipping inputs that are already right. `on_auto` (default false) also switches when Auto changes player.
+
+### Changed
+- Kodi text is sent live (`Input.SendText` with `done: false`), then with `done: true` on Enter. Enter cancels any pending live update.
+
 ## [0.1.1] - unreleased
 
 ### Added
@@ -44,5 +54,6 @@ All notable changes to this project are documented here. The format follows
 - Text: keyboard and dictation text box, and the automatic "wants text" bar.
 - Look and feel: Liquid Glass styling, thin line icons, haptics.
 
+[0.1.2]: https://github.com/evski/ha-glass-remote-card/releases/tag/v0.1.2
 [0.1.1]: https://github.com/evski/ha-glass-remote-card/releases/tag/v0.1.1
 [0.1.0]: https://github.com/evski/ha-glass-remote-card/releases/tag/v0.1.0

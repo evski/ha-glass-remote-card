@@ -9,7 +9,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "0.1.1";
+  const VERSION = "0.1.2";
   const TAG = "glass-remote-card";
   const PICK_KEY = "glass-remote-card:pick:";
 
@@ -135,8 +135,10 @@
         channel_up: (p) => kodi(p, "Input.ExecuteAction", { action: "channelup" }),
         channel_down: (p) => kodi(p, "Input.ExecuteAction", { action: "channeldown" }),
       },
+      // Input.SendText replaces the keyboard's text: sent live with done=false, then done=true on Enter.
       text: (p, text, done) => [kodi(p, "Input.SendText", { text, done: !!done })],
-      textLive: false,
+      textLive: true,
+      kbPoll: true,
       channels: false,
       more: ["info", "subtitles", "subtitles_hold", "audio_track", "sound_mode", "osd", "context_menu"],
     },
@@ -209,6 +211,8 @@
             throw new Error(`glass-remote-card: players[${i}].more[${j}] needs a name and a key or service`);
         });
       }
+      if (p.keyboard_poll !== undefined && (typeof p.keyboard_poll !== "number" || p.keyboard_poll < 0))
+        throw new Error(`glass-remote-card: players[${i}].keyboard_poll must be milliseconds (0 = off)`);
       if (p.channels !== undefined && typeof p.channels !== "boolean") throw new Error(`glass-remote-card: players[${i}].channels must be true or false`);
       return p;
     });
@@ -225,7 +229,7 @@
   // ---------------------------------------------------------------------------
   const INPUT_KEYS = ["home", "power", "select", "back", "play_pause", "up", "down", "left", "right",
     "skip_back", "skip_fwd", "info", "subtitles", "channel_up", "channel_down", "volume_up", "volume_down", "mute", "text"];
-  const INPUT_DEFAULTS = { turn_on: false, turn_on_delay: 1500, triggers: ["home"], skip_if_selected: true, delay: 0 };
+  const INPUT_DEFAULTS = { turn_on: false, turn_on_delay: 1500, triggers: ["home"], skip_if_selected: true, delay: 0, on_auto: false };
 
   function normaliseInputs(raw, i) {
     const list = Array.isArray(raw) ? raw : [raw];
@@ -236,9 +240,10 @@
       const o = { ...INPUT_DEFAULTS, ...inp };
       o.triggers = (Array.isArray(o.triggers) ? o.triggers : [o.triggers]).map(String);
       for (const t of o.triggers) {
-        if (!INPUT_KEYS.includes(t) && t !== "any" && t !== "first")
-          throw new Error(`${where}.triggers: "${t}" isn't one of ${INPUT_KEYS.join(", ")}, any, first`);
+        if (!INPUT_KEYS.includes(t) && t !== "any" && t !== "first" && t !== "pick")
+          throw new Error(`${where}.triggers: "${t}" isn't one of ${INPUT_KEYS.join(", ")}, any, first, pick`);
       }
+      if (typeof o.on_auto !== "boolean") throw new Error(`${where}.on_auto must be true or false`);
       for (const k of ["turn_on_delay", "delay"]) {
         if (typeof o[k] !== "number" || o[k] < 0) throw new Error(`${where}.${k} must be a number of milliseconds`);
       }
@@ -250,12 +255,14 @@
    * Steps that switch inputs before `key` on player `p`. A ["wait", ms] step pauses the sequence.
    * firstPress = this is the first button pressed since the card started controlling this player.
    */
-  function inputSteps(p, key, states, firstPress = false) {
+  function inputSteps(p, key, states, firstPress = false, opts = {}) {
     const out = [];
     const base = String(key).replace(/_hold$/, "");
     for (const inp of p.input || []) {
       const t = inp.triggers;
-      if (!(t.includes(base) || t.includes("any") || (t.includes("first") && firstPress))) continue;
+      if (base === "pick") { // the player was picked (or, with on_auto, Auto switched to it)
+        if (!t.includes("pick") || (opts.auto && !inp.on_auto)) continue;
+      } else if (!(t.includes(base) || t.includes("any") || (t.includes("first") && firstPress))) continue;
       const st = states[inp.entity];
       if (!st || st.state === "unavailable" || st.state === "unknown") continue; // nothing we can do
       const off = OFF_STATES.includes(st.state);
@@ -372,6 +379,29 @@
   }
   const hasChannels = (p) => !!(p.channels === undefined ? PLATFORMS[p.platform].channels : p.channels) &&
     !!(PLATFORMS[p.platform].keys.channel_up || (p.actions && p.actions.channel_up));
+
+  // ---------------------------------------------------------------------------
+  // Kodi keyboard detection: poll GUI.GetProperties(currentwindow) and read the
+  // kodi_call_method_result event. 10103 = virtual keyboard, 10109 = numeric input.
+  // ---------------------------------------------------------------------------
+  const KODI_KB_WINDOWS = [10103, 10109];
+  /** ms between polls for this player (0 = don't poll right now). */
+  function kbPollInterval(p, st, config = {}) {
+    if (!PLATFORMS[p.platform].kbPoll) return 0;
+    const ms = p.keyboard_poll !== undefined ? p.keyboard_poll : config.keyboard_poll !== undefined ? config.keyboard_poll : 2000;
+    if (!ms) return 0;
+    const always = p.keyboard_poll_during_video !== undefined ? p.keyboard_poll_during_video : !!config.keyboard_poll_during_video;
+    if (!always && st && st.state === "playing" && (st.attributes || {}).media_content_type !== "music") return 0;
+    if (!st || st.state === "unavailable" || st.state === "off") return 0;
+    return Math.max(500, ms);
+  }
+  /** From a kodi_call_method_result event: true/false = keyboard open/closed, null = not ours. */
+  function kodiKeyboardFromEvent(data, entity) {
+    if (!data || data.entity_id !== entity || !data.input || data.input.method !== "GUI.GetProperties") return null;
+    const w = data.result && data.result.currentwindow;
+    if (!w) return null;
+    return KODI_KB_WINDOWS.includes(Number(w.id)) || /virtual keyboard|numeric input/i.test(String(w.label || ""));
+  }
 
   function guessPlatform(p) {
     if (p.remote && /apple|atv/i.test(p.entity + p.remote)) return "apple_tv";
@@ -634,8 +664,60 @@
     }
     get hass() { return this._hass; }
 
-    connectedCallback() { if (this._config && !this._built) this._build(); if (this._hass) this._update(); }
-    disconnectedCallback() { for (const t of this._timers) { clearTimeout(t); clearInterval(t); } this._timers.clear(); }
+    connectedCallback() {
+      if (this._config && !this._built) this._build();
+      if (!this._onVis) { this._onVis = () => this._syncKbPoll(); }
+      document.addEventListener("visibilitychange", this._onVis);
+      if (this._hass) this._update();
+    }
+    disconnectedCallback() {
+      document.removeEventListener("visibilitychange", this._onVis);
+      this._stopKbPoll();
+      for (const t of this._timers) { clearTimeout(t); clearInterval(t); } this._timers.clear();
+    }
+
+    // ---- Kodi keyboard detection ------------------------------------------------
+    /** Start, retarget or stop the poll to match the current state. Safe to call often. */
+    _syncKbPoll() {
+      if (this._kbSyncing) return; // _stopKbPoll -> _update -> here
+      this._kbSyncing = true;
+      try { this._syncKbPollInner(); } finally { this._kbSyncing = false; }
+    }
+    _syncKbPollInner() {
+      const p = this._hass && this._config && this.activePlayer;
+      const visible = this.isConnected && (typeof document === "undefined" || document.visibilityState !== "hidden");
+      const conn = this._hass && this._hass.connection;
+      const ms = p && visible && conn && conn.subscribeEvents ? kbPollInterval(p, this._states[p.entity], this._config) : 0;
+      const key = ms ? p.entity + "|" + ms : null;
+      if (key === this._kbKey) return;
+      this._stopKbPoll();
+      if (!key) return;
+      this._kbKey = key; this._kbEntity = p.entity;
+      const gen = this._kbGen = (this._kbGen || 0) + 1;
+      conn.subscribeEvents((ev) => {
+        const open = kodiKeyboardFromEvent(ev && ev.data, this._kbEntity);
+        if (open === null || open === this._kbOpen) return;
+        this._kbOpen = open; this._update();
+      }, "kodi_call_method_result").then((unsub) => {
+        if (gen !== this._kbGen) { try { unsub(); } catch (_) { /* gone */ } } else this._kbUnsub = unsub;
+      }, (e) => console.warn(TAG, "kodi keyboard events", e));
+      const tick = () => {
+        if (this._kbTimer) { this._timers.delete(this._kbTimer); this._kbTimer = null; } // fired: forget its handle
+        if (gen !== this._kbGen) return;
+        try {
+          const r = this._hass.callService("kodi", "call_method", { entity_id: this._kbEntity, method: "GUI.GetProperties", properties: ["currentwindow"] });
+          if (r && r.catch) r.catch(() => {});
+        } catch (_) { /* ignore */ }
+        this._kbTimer = setTimeout(tick, ms); this._timers.add(this._kbTimer);
+      };
+      tick();
+    }
+    _stopKbPoll() {
+      this._kbGen = (this._kbGen || 0) + 1; this._kbKey = null;
+      if (this._kbTimer) { clearTimeout(this._kbTimer); this._timers.delete(this._kbTimer); this._kbTimer = null; }
+      if (this._kbUnsub) { try { this._kbUnsub(); } catch (_) { /* gone */ } this._kbUnsub = null; }
+      if (this._kbOpen) { this._kbOpen = false; if (this._built && this._hass) this._update(); }
+    }
 
     // ---- state -------------------------------------------------------------
     get _states() { return (this._hass && this._hass.states) || {}; }
@@ -652,8 +734,9 @@
       this._seenHref = href;
       const param = this._config.url_param || "player";
       const want = new URL(href).searchParams.get(param);
-      if (want && this._config.players.some((p) => p.entity === want)) this._writePick(want);
+      if (want && this._config.players.some((p) => p.entity === want)) { this._writePick(want); this._urlPicked = want; }
     }
+    _manualPick() { const k = this._readPick(); return !!(k && k.entity && Date.now() - k.ts < this._config.pick_timeout * 60000); }
     get activeEntity() { return choosePlayer(this._config, this._states, this._readPick()); }
     get activePlayer() { const id = this.activeEntity; return this._config.players.find((p) => p.entity === id); }
 
@@ -925,7 +1008,8 @@
       else if (act === "kb-clear") { const ta = r.querySelector(".kb textarea"); ta.value = ""; this._kbText = ""; this.sendText("", false); ta.focus(); }
       else if (act === "kb-send") {
         const p = this.activePlayer;
-        if (p && !PLATFORMS[p.platform].textLive) this.sendText(this._kbText, true);
+        clearTimeout(this._db_kb); // no stale live update after Enter
+        if (p && (!PLATFORMS[p.platform].textLive || p.platform === "kodi")) this.sendText(this._kbText, true);
         else if (p && p.platform === "webostv") { this.sendText(this._kbText, false); this.sendText(this._kbText, true); }
         else this.sendText(this._kbText, false);
         this._closeSheets();
@@ -933,13 +1017,24 @@
       else if (act.startsWith("pick:")) {
         const id = act.slice(5);
         this._writePick(id === "auto" ? null : id);
-        this._closeSheets(); this._update();
+        this._closeSheets();
+        if (id !== "auto") this._pickInputs(id, false);
+        this._update();
       }
       else if (act === "exit") {
         this._closeSheets();
         history.pushState(null, "", this._config.exit_path);
         window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
       }
+    }
+    /** Switch the room's AVR/TV to `entity`'s input (inputs with triggers: [pick]). auto = Auto chose it. */
+    _pickInputs(entity, auto) {
+      const p = this._config.players.find((x) => x.entity === entity);
+      if (!p || !p.input || this._switching) return;
+      const steps = inputSteps(p, "pick", this._states, false, { auto });
+      if (!steps.length) return;
+      this._switching = true;
+      this._call(steps).finally(() => { this._switching = false; });
     }
     _closeSheets() { this.shadowRoot.querySelectorAll(".sheet-bg").forEach((s) => s.classList.remove("show")); }
     _friendly(p) { const st = this._states[p.entity]; return p.name || (st && st.attributes && st.attributes.friendly_name) || p.entity; }
@@ -975,6 +1070,10 @@
       const p = this.activePlayer;
       if (!p) return;
       if (this._lastTarget !== p.entity) this._pressedSinceTarget = false;
+      if (this._urlPicked) { const u = this._urlPicked; this._urlPicked = null; this._pickInputs(u, false); }
+      else if (this._prevActive && this._prevActive !== p.entity && !this._manualPick()) this._pickInputs(p.entity, true);
+      this._prevActive = p.entity;
+      this._syncKbPoll();
       const st = this._states[p.entity];
       const np = nowPlaying({ ...p, name: this._friendly(p) }, st);
       const sig = [p.entity, np.title, np.subtitle, np.art].join("|");
@@ -995,7 +1094,7 @@
       mute.innerHTML = icon(muted ? "mute" : "unmuted");
       // "wants text" bar (Apple TV keyboard focus sensor, or any binary_sensor you point at)
       const ks = p.keyboard_sensor && this._states[p.keyboard_sensor];
-      const wants = !!(ks && ks.state === "on");
+      const wants = !!(ks && ks.state === "on") || !!(this._kbOpen && this._kbEntity === p.entity);
       const bt = bannerText(p, this._friendly(p), /iPhone|iPad|iPod/.test(navigator.userAgent || "") || /Home Assistant\/.*iOS/.test(navigator.userAgent || ""));
       r.querySelector(".wants .t1").textContent = bt.title;
       r.querySelector(".wants .t2").textContent = bt.line2;
@@ -1019,7 +1118,7 @@
 
   // Exposed for tests and power users.
   GlassRemoteCard.VERSION = VERSION;
-  GlassRemoteCard.helpers = { sourceMenu, soundModeMenu, optionSteps, moreItems, hasChannels, bannerText, normaliseConfig, inputSteps, choosePlayer, volumeTarget, nowPlaying, stepsFor, swipeDirection, guessPlatform, PLATFORMS, ICONS };
+  GlassRemoteCard.helpers = { kbPollInterval, kodiKeyboardFromEvent, sourceMenu, soundModeMenu, optionSteps, moreItems, hasChannels, bannerText, normaliseConfig, inputSteps, choosePlayer, volumeTarget, nowPlaying, stepsFor, swipeDirection, guessPlatform, PLATFORMS, ICONS };
 
   if (!customElements.get(TAG)) customElements.define(TAG, GlassRemoteCard);
   window.customCards = window.customCards || [];

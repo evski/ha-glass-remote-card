@@ -36,7 +36,7 @@ Single JavaScript file. No dependencies: no card-mod, browser_mod, kiosk-mode or
 - **Keyboard and dictation.**
   - The keyboard and mic buttons open a text box.
   - On iPhone, tap the keyboard's mic key to dictate.
-  - Text goes live to an Apple TV or LG, and is sent with Enter to Kodi.
+  - Text goes live to an Apple TV, LG or Kodi. Kodi gets `Input.SendText` with `done: false` while you type and `done: true` on Enter, so it lands in an add-on's search box.
 - **Keyboard notification.** When the Apple TV's keyboard-focus sensor turns on, an iOS-style banner slides down: "*Living Room Keyboard* / *Keyboard Input* / Enter text on your Apple TV using your iOS keyboard. Press to type." Tap it to type.
 - **Input switching.** Before a key is sent, the card can put your AV receiver, soundbar or TV on the right input. By default this happens on Home. See [Input switching](#input-switching).
 - **Haptics** in the Home Assistant companion apps.
@@ -152,6 +152,8 @@ source_map:                               # optional: follow the TV's input
 | `sound_mode` | The sound mode menu (hold the speaker badge, or ⋯ → Sound Mode). |
 | `more` | Items in the ⋯ menu, or `false` to hide it. |
 | `channels` | Show the CH up/down control. |
+| `keyboard_poll` | Kodi: how often (ms) to check whether Kodi's on-screen keyboard is open. Default `2000`; `0` turns it off. Also settable on the card. See [Kodi keyboard detection](#kodi-keyboard-detection). |
+| `keyboard_poll_during_video` | Kodi: keep checking while a video plays. Default `false`. |
 | `actions` | Override any button: `up`, `down`, `left`, `right`, `select`, `select_hold`, `back`, `back_hold`, `home`, `home_hold`, `play_pause`, `skip_back`, `skip_fwd`, `info`, `subtitles`, `channel_up`, `channel_down`, `power`, `volume_up`, `volume_down`, `mute`, `text`. Each takes `{service, data, target}` or a list of them. In `text`, the value `$text` is replaced with what you typed. |
 
 ```yaml
@@ -253,6 +255,23 @@ This is shown for `apple_tv` (pyatv `channel_up`/`channel_down`, for live-TV app
 
 Power uses `media_player.turn_on` when the Apple TV is off or in standby, and `media_player.turn_off` otherwise. The card never sends `remote.send_command` `turn_off`/`suspend` with `hold_secs`, because pyatv rejects a held power command. There is no long-press action on Power.
 
+## Kodi keyboard detection
+
+Kodi has no "keyboard is open" sensor in Home Assistant, so the card asks Kodi itself. While Kodi is the active player, the card is on screen, and Kodi isn't playing a video, the card calls `kodi.call_method` → `GUI.GetProperties {properties: [currentwindow]}` every `keyboard_poll` ms. It reads the answer from the `kodi_call_method_result` event.
+
+When the current window is the virtual keyboard (`10103`) or the numeric input (`10109`), the keyboard banner slides down. Tap it to type; the banner hides once Kodi closes the keyboard.
+
+- Polling stops when the page or app is in the background, the card is removed, another player is picked, Kodi is off or a video starts. Set `keyboard_poll_during_video: true` to keep it running during video.
+- The poll is read-only. It doesn't add logbook entries, but each poll and its result are stored as events by the recorder. If you don't want them in your database, exclude `call_service` / `kodi_call_method_result` in `recorder:` or raise `keyboard_poll`.
+- It needs a Home Assistant user that may call `kodi.call_method`, as for every other Kodi button.
+
+```yaml
+  - entity: media_player.kodi
+    platform: kodi
+    keyboard_poll: 1500            # ms; 0 = off
+    keyboard_poll_during_video: false
+```
+
 ## Input switching
 
 Say Kodi plays through the receiver's `UHD` input, and the receiver is still on the Apple TV's input. Pressing Home on Kodi would then do nothing you can see. With `input:`, the card first switches the receiver to `UHD` and then sends Home. If the receiver is already on `UHD`, only Home is sent.
@@ -269,17 +288,37 @@ Say Kodi plays through the receiver's `UHD` input, and the receiver is still on 
 |---|---|---|
 | `entity` | **required** | The `media_player` whose input is switched: an AV receiver, soundbar or TV. |
 | `source` | **required** unless `action` is set | Source name to select. It must match the entity's `source_list` exactly. |
-| `triggers` | `[home]` | Which buttons switch the input first. You can use any key name (`home`, `power`, `select`, `back`, `play_pause`, `up`, `down`, `left`, `right`, `skip_back`, `skip_fwd`, `info`, `subtitles`, `volume_up`, `volume_down`, `mute`, `text`). `any` means every button. `first` means the first button pressed after the card starts controlling this player. Long presses (`home_hold`) count as their button. |
+| `triggers` | `[home]` | Which buttons switch the input first. You can use any key name (`home`, `power`, `select`, `back`, `play_pause`, `up`, `down`, `left`, `right`, `skip_back`, `skip_fwd`, `info`, `subtitles`, `volume_up`, `volume_down`, `mute`, `text`). `any` means every button. `first` means the first button pressed after the card starts controlling this player. `pick` means when you pick this player in the picker (or open the card with `?player=`). Long presses (`home_hold`) count as their button. |
 | `skip_if_selected` | `true` | Do nothing if the entity is already on `source`. Set `false` to send the switch every time. |
 | `turn_on` | `false` | If the entity is off or in standby, turn it on first. When this is `false` and the entity is off, the switch is skipped, because selecting a source on an off receiver does nothing. |
 | `turn_on_delay` | `1500` | Milliseconds to wait after `turn_on` before selecting the source. Receivers often ignore commands while they boot. |
 | `delay` | `0` | Milliseconds to wait after switching and before sending the key. |
+| `on_auto` | `false` | With `pick`: also switch when **Auto** moves to this player by itself. Off by default, so Auto never fights you. |
 | `action` | – | A custom action (or a list) used **instead of** `media_player.select_source`, e.g. a script. Takes `{service, data, target}`. `$source` in the data is replaced with `source`. |
 
 Notes:
 - An `unavailable` or `unknown` entity is skipped and the key is still sent.
 - While a switch is running, another press doesn't start a second switch.
 - With a list of inputs, they run in order. For example: the receiver first, then the TV's HDMI input.
+
+**Switch the room when you pick a player** (and keep Home switching too):
+
+```yaml
+  - entity: media_player.living_room_apple_tv
+    input:
+      - entity: media_player.receiver
+        source: PVR
+        triggers: [pick, home]
+      - entity: media_player.living_room_tv     # TV on the receiver's HDMI
+        source: AV Receiver
+        triggers: [pick]
+  - entity: media_player.kodi
+    input:
+      entity: media_player.receiver
+      source: UHD
+      triggers: [pick, home]
+      # on_auto: true    # also when Auto picks Kodi by itself (off by default)
+```
 
 **AV receiver, powered on when needed:**
 

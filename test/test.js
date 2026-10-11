@@ -43,15 +43,21 @@ const CONFIG = () => ({
   ],
   source_map: { entity: "media_player.lr_tv", sources: { "Apple TV": "media_player.lr_appletv", "Kodi box": "media_player.kodi" }, ignore_sources: ["AV Receiver", "HDMI 1"] },
 });
-function fakeHass(st) {
+function fakeHass(st, withConn = false) {
   const calls = [];
-  return { states: st, calls, callService: (d, s, data) => { calls.push([d, s, data]); return Promise.resolve(); } };
+  const h = { states: st, calls, callService: (d, s, data) => { calls.push([d, s, data]); return Promise.resolve(); } };
+  if (withConn) {
+    h.subs = []; h.unsubs = 0;
+    h.connection = { subscribeEvents: (cb, type) => { const sub = { cb, type, live: true }; h.subs.push(sub); return Promise.resolve(() => { sub.live = false; h.unsubs++; }); } };
+    h.fire = (data) => h.subs.filter((x) => x.live && x.type === "kodi_call_method_result").forEach((x) => x.cb({ event_type: "kodi_call_method_result", data }));
+  }
+  return h;
 }
-function mount(w, config, st) {
+function mount(w, config, st, withConn = false) {
   const card = w.document.createElement("glass-remote-card");
   card.setConfig(config);
   w.document.body.appendChild(card);
-  const hass = fakeHass(st);
+  const hass = fakeHass(st, withConn);
   card.hass = hass;
   return { card, hass, $: (q) => card.shadowRoot.querySelector(q) };
 }
@@ -180,8 +186,11 @@ function ptr(w, el, type, x = 100, y = 100) {
   m.$(".mic").click();
   check("D17 mic opens the text box", m.$(".kb").classList.contains("show"));
   const ta = m.$(".kb textarea"); ta.value = "space"; ta.dispatchEvent(new w.Event("input")); await sleep(400);
-  check("D18 Kodi: nothing sent while typing", m.hass.calls.length === 0);
-  m.card.shadowRoot.querySelector('[data-act="kb-send"]').click();
+  check("D18 Kodi: live Input.SendText done=false while typing", eq(m.hass.calls, [["kodi", "call_method", { entity_id: "media_player.kodi", method: "Input.SendText", text: "space", done: false }]]), m.hass.calls);
+  ta.value = "space x"; ta.dispatchEvent(new w.Event("input"));
+  m.card.shadowRoot.querySelector('[data-act="kb-send"]').click(); await sleep(400);
+  check("D19b Enter cancels the pending live update (no stale done=false after done=true)", m.hass.calls.length === 2 && m.hass.calls[1][2].text === "space x", m.hass.calls);
+  m.hass.calls[1][2].text = "space";
   check("D19 Kodi: Send -> Input.SendText done", eq(m.hass.calls.pop(), ["kodi", "call_method", { entity_id: "media_player.kodi", method: "Input.SendText", text: "space", done: true }]));
 
   // Apple TV: live text + wants-text bar
@@ -216,7 +225,7 @@ function ptr(w, el, type, x = 100, y = 100) {
   // ---- I: input switching -----------------------------------------------------------
   const INP = (o = {}) => H.normaliseConfig({ players: [{ entity: "media_player.kodi", platform: "kodi", input: { entity: "media_player.avr", source: "UHD", ...o } }] }).players[0];
   const avr = (st, src) => states({ "media_player.avr": { state: st, attributes: { source: src } } });
-  check("I1 defaults", eq(INP().input[0], { turn_on: false, turn_on_delay: 1500, triggers: ["home"], skip_if_selected: true, delay: 0, entity: "media_player.avr", source: "UHD" }));
+  check("I1 defaults", eq(INP().input[0], { turn_on: false, turn_on_delay: 1500, triggers: ["home"], skip_if_selected: true, delay: 0, on_auto: false, entity: "media_player.avr", source: "UHD" }));
   check("I2 home on another source -> select_source", eq(H.inputSteps(INP(), "home", avr("on", "PVR")), [["media_player", "select_source", { entity_id: "media_player.avr", source: "UHD" }]]));
   check("I3 already on source -> nothing (skip_if_selected)", H.inputSteps(INP(), "home", avr("on", "UHD")).length === 0);
   check("I4 skip_if_selected false -> always switch", H.inputSteps(INP({ skip_if_selected: false }), "home", avr("on", "UHD")).length === 1);
@@ -346,6 +355,113 @@ function ptr(w, el, type, x = 100, y = 100) {
   ptr(w, m.$(".tab[data-key=\"volume_up\"]"), "pointerdown"); await sleep(700); ptr(w, m.$(".tab[data-key=\"volume_up\"]"), "pointerup");
   check("O19 + tab still repeats while held", m.hass.calls.filter((c) => c[1] === "volume_up").length >= 2);
   m.card.remove();
+
+  // ---- IP: input switch on picking a player --------------------------------------------
+  {
+    check("IP1 pick trigger -> switch", H.inputSteps(INP({ triggers: ["pick"] }), "pick", avr("on", "PVR")).length === 1);
+    check("IP2 pick not triggered by buttons, buttons/any not by pick", H.inputSteps(INP({ triggers: ["pick"] }), "home", avr("on", "PVR")).length === 0 &&
+      H.inputSteps(INP({ triggers: ["any"] }), "pick", avr("on", "PVR")).length === 0);
+    check("IP3 Auto change ignored unless on_auto", H.inputSteps(INP({ triggers: ["pick"] }), "pick", avr("on", "PVR"), false, { auto: true }).length === 0 &&
+      H.inputSteps(INP({ triggers: ["pick"], on_auto: true }), "pick", avr("on", "PVR"), false, { auto: true }).length === 1);
+    check("IP4 skip when already on the source", H.inputSteps(INP({ triggers: ["pick"] }), "pick", avr("on", "UHD")).length === 0);
+    check("IP5 validation: on_auto boolean", bad({ players: [{ entity: "media_player.k", input: { entity: "media_player.avr", source: "x", on_auto: "yes" } }] }));
+    const pc = CONFIG();
+    pc.players[0].input = { entity: "media_player.avr", source: "PVR", triggers: ["pick"] };
+    pc.players[1].input = [{ entity: "media_player.avr", source: "UHD", triggers: ["home", "pick"] }, { entity: "media_player.lr_tv", source: "AV Receiver", triggers: ["pick"] }];
+    w.localStorage.clear();
+    let q = mount(w, pc, states({ "media_player.avr": { attributes: { source: "PVR" } } }));
+    check("IP6 nothing sent on load", q.hass.calls.length === 0);
+    q.$(".pill").click(); q.card.shadowRoot.querySelector('[data-act="pick:media_player.kodi"]').click(); await sleep(20);
+    check("IP7 manual pick Kodi -> Arcam UHD (TV already on AV Receiver: skipped)", eq(q.hass.calls, [["media_player", "select_source", { entity_id: "media_player.avr", source: "UHD" }]]), q.hass.calls);
+    q.$(".pill").click(); q.card.shadowRoot.querySelector('[data-act="pick:media_player.lr_appletv"]').click(); await sleep(20);
+    check("IP8 manual pick Apple TV -> PVR skipped (AVR state still PVR)", q.hass.calls.length === 1);
+    q.$(".pill").click(); q.card.shadowRoot.querySelector('[data-act="pick:auto"]').click(); await sleep(20);
+    check("IP9 back to Auto (Kodi) -> no switch (on_auto off)", q.hass.calls.length === 1, q.hass.calls);
+    // Auto switches by itself (TV input changes to Apple TV)
+    q.card.hass = { ...q.hass, states: states({ "media_player.avr": { attributes: { source: "UHD" } }, "media_player.lr_tv": { attributes: { source: "Apple TV" } } }) }; await sleep(20);
+    check("IP10 Auto moving to Apple TV doesn't fight (on_auto false)", q.card.activeEntity === "media_player.lr_appletv" && q.hass.calls.length === 1, q.hass.calls);
+    q.card.remove();
+    pc.players[0].input.on_auto = true;
+    q = mount(w, pc, states({ "media_player.avr": { attributes: { source: "UHD" } } }));
+    q.card.hass = { ...q.hass, states: states({ "media_player.avr": { attributes: { source: "UHD" } }, "media_player.lr_tv": { attributes: { source: "Apple TV" } } }) }; await sleep(20);
+    check("IP11 on_auto: Auto moving to Apple TV -> PVR", eq(q.hass.calls, [["media_player", "select_source", { entity_id: "media_player.avr", source: "PVR" }]]), q.hass.calls);
+    q.card.remove(); w.localStorage.clear();
+  }
+
+  // ---- KB: Kodi keyboard detection --------------------------------------------------------
+  {
+    const kst = (o = {}) => states({ "media_player.kodi": { state: "idle", attributes: { media_content_type: null } }, ...o });
+    const KP = (o = {}) => H.normaliseConfig({ players: [{ entity: "media_player.kodi", platform: "kodi", ...o }] }).players[0];
+    check("KB1 default interval 2000 while idle", H.kbPollInterval(KP(), { state: "idle", attributes: {} }) === 2000);
+    check("KB2 no poll while video plays", H.kbPollInterval(KP(), { state: "playing", attributes: { media_content_type: "episode" } }) === 0);
+    check("KB3 music playing still polls", H.kbPollInterval(KP(), { state: "playing", attributes: { media_content_type: "music" } }) === 2000);
+    check("KB4 keyboard_poll_during_video: true", H.kbPollInterval(KP({ keyboard_poll_during_video: true }), { state: "playing", attributes: { media_content_type: "movie" } }) === 2000);
+    check("KB5 keyboard_poll: 0 = off; card-level default", H.kbPollInterval(KP({ keyboard_poll: 0 }), { state: "idle" }) === 0 &&
+      H.kbPollInterval(KP(), { state: "idle" }, { keyboard_poll: 3000 }) === 3000);
+    check("KB6 not Kodi / off -> no poll", H.kbPollInterval(H.normaliseConfig(CONFIG()).players[0], { state: "idle" }) === 0 && H.kbPollInterval(KP(), { state: "off" }) === 0);
+    check("KB7 validation", bad({ players: [{ entity: "media_player.kodi", keyboard_poll: "2s" }] }));
+    const ev = (id, label, ent = "media_player.kodi", method = "GUI.GetProperties") => ({ entity_id: ent, result: { currentwindow: { id, label } }, result_ok: true, input: { method, params: { properties: ["currentwindow"] } } });
+    check("KB8 event parsing", H.kodiKeyboardFromEvent(ev(10103, "Virtual keyboard"), "media_player.kodi") === true &&
+      H.kodiKeyboardFromEvent(ev(10109, "Numeric input"), "media_player.kodi") === true &&
+      H.kodiKeyboardFromEvent(ev(10000, "Home"), "media_player.kodi") === false &&
+      H.kodiKeyboardFromEvent(ev(10103, "x", "media_player.other"), "media_player.kodi") === null &&
+      H.kodiKeyboardFromEvent(ev(10103, "x", "media_player.kodi", "Player.GetItem"), "media_player.kodi") === null);
+
+    w.localStorage.clear();
+    const kcfg = CONFIG(); kcfg.players[1].keyboard_poll = 500;
+    let k = mount(w, kcfg, kst(), true);
+    const polls = () => k.hass.calls.filter((c) => c[2] && c[2].method === "GUI.GetProperties");
+    await sleep(20);
+    check("KB9 Kodi active + visible: polls at once and subscribes to kodi_call_method_result",
+      polls().length === 1 && eq(polls()[0], ["kodi", "call_method", { entity_id: "media_player.kodi", method: "GUI.GetProperties", properties: ["currentwindow"] }]) &&
+      k.hass.subs.length === 1 && k.hass.subs[0].type === "kodi_call_method_result");
+    await sleep(1100);
+    check("KB10 polls every keyboard_poll ms", polls().length === 3, polls().length);
+    check("KB10b timer set doesn't grow while polling", k.card._timers.size <= 1, k.card._timers.size);
+    check("KB11 a single subscription even with many hass updates", (() => { for (let i = 0; i < 5; i++) k.card.hass = { ...k.hass, states: kst() }; return k.hass.subs.filter((x) => x.live).length === 1; })());
+    k.hass.fire(ev(10103, "Virtual keyboard"));
+    check("KB12 keyboard open -> Apple-style banner", k.$(".wants").classList.contains("show") && k.$(".wants .t1").textContent === "Kodi Keyboard" && /^Enter text on Kodi/.test(k.$(".wants .t3").textContent));
+    k.hass.fire(ev(10103, "Virtual keyboard", "media_player.other"));
+    k.hass.fire(ev(10000, "Home"));
+    check("KB13 closes -> banner hides; other entities ignored", !k.$(".wants").classList.contains("show"));
+    k.hass.fire(ev(10109, "Numeric input"));
+    k.$(".wants").click();
+    check("KB14 numeric input shows it too; tapping opens text entry", k.$(".kb").classList.contains("show"));
+    k.card._closeSheets();
+    // video starts -> stop
+    const before = polls().length;
+    k.card.hass = { ...k.hass, states: kst({ "media_player.kodi": { state: "playing", attributes: { media_content_type: "movie" } } }) };
+    await sleep(1100);
+    check("KB15 video playing -> polling stops, unsubscribed, banner cleared, no timers left",
+      polls().length === before && k.hass.unsubs === 1 && !k.$(".wants").classList.contains("show") && !k.card._kbTimer, [polls().length, before, k.hass.unsubs]);
+    k.card.hass = { ...k.hass, states: kst() }; await sleep(20);
+    check("KB16 resumes when video stops", polls().length === before + 1 && k.hass.subs.filter((x) => x.live).length === 1);
+    // tab hidden
+    Object.defineProperty(w.document, "visibilityState", { configurable: true, get: () => "hidden" });
+    w.document.dispatchEvent(new w.Event("visibilitychange"));
+    const b2 = polls().length; await sleep(1100);
+    check("KB17 page hidden -> stops", polls().length === b2 && k.hass.unsubs === 2);
+    Object.defineProperty(w.document, "visibilityState", { configurable: true, get: () => "visible" });
+    w.document.dispatchEvent(new w.Event("visibilitychange")); await sleep(20);
+    check("KB18 visible again -> restarts", polls().length === b2 + 1);
+    // switch to Apple TV
+    k.card._writePick("media_player.lr_appletv"); k.card.hass = { ...k.hass, states: kst() };
+    const b3 = polls().length; await sleep(1100);
+    check("KB19 another player picked -> stops", polls().length === b3 && k.hass.subs.filter((x) => x.live).length === 0);
+    k.card._writePick(null); k.card.hass = { ...k.hass, states: kst() }; await sleep(20);
+    // removed from the page
+    k.card.remove(); const b4 = polls().length; await sleep(1100);
+    check("KB20 removed -> no polls, no subscription, no timers", polls().length === b4 && k.hass.subs.filter((x) => x.live).length === 0 && k.card._timers.size === 0, [polls().length, b4, k.card._timers.size]);
+    // keyboard_poll 0
+    k = mount(w, { ...CONFIG(), players: CONFIG().players.map((p) => p.platform === "kodi" ? { ...p, keyboard_poll: 0 } : p) }, kst(), true); await sleep(50);
+    check("KB21 keyboard_poll: 0 -> no polls, no subscription", polls().length === 0 && k.hass.subs.length === 0);
+    k.card.remove();
+    // no connection (older frontends / tests) -> nothing
+    k = mount(w, CONFIG(), kst()); await sleep(50);
+    check("KB22 no hass.connection -> no polling", polls().length === 0);
+    k.card.remove();
+    w.localStorage.clear();
+  }
 
   // URL pick (Sidebar Mini Player remote_path: /remote?player={entity})
   w.localStorage.clear();
