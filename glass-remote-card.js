@@ -30,8 +30,8 @@
  * banner text without platform trademarks, system-ui font stack, trademark notice.
  * 0.1.10 device picker: a dropdown anchored under the top pill that grows downward (never a bottom sheet).
  * The pill's chevron turns from > to v; rows are plain (tick, small device icon, name) with hairline dividers;
- * Auto and Exit remote stay as rows; a thin close button sits at the list's top right; tapping outside or on
- * the pill closes it. The list spans the top row (the column on tablets).
+ * Auto and Exit remote stay as rows; tapping outside or on the pill closes it (0.1.10 also had a close button,
+ * removed in 0.1.12). The list spans the top row (the column on tablets).
  * 0.1.11 (Grok Bot, 11 Oct 2026): the whole top pill is one tap target. A live test showed taps on the
  * middle of the pill and on its chevron did not open the picker; only a click on the button's exact centre
  * did. Root cause: the card's full-screen layer and the picker backdrop are stacked inside the dashboard
@@ -40,11 +40,18 @@
  * itself is always the target; the picker now lives inside the card's own layer with the top row raised
  * above its backdrop, so tapping the pill toggles it closed; and taps that land on a foreign layer over the
  * pill's area are routed to the pill. One button (aria-haspopup, aria-expanded, aria-controls); Escape closes.
+ * 0.1.12 (Grok Bot, 11 Oct 2026): the device picker is a compact floating frosted-glass panel that is only as
+ * tall as its rows (Auto, the devices, Exit remote) and grows down from the pill, with rounded corners and a
+ * soft shadow. Why: feedback that the open dropdown covered the whole page as a dark full-height sheet. The
+ * full-page shade is gone; a transparent full-screen tap-catcher stays, so tapping outside still closes it.
+ * The panel scrolls only when the rows would run past the bottom of the screen. The close button is removed:
+ * tapping the pill, tapping outside or pressing Escape closes it. The sources, sound mode and More menus were
+ * already compact floating panels without a close button, so they are unchanged.
  */
 (() => {
   "use strict";
 
-  const VERSION = "0.1.11";
+  const VERSION = "0.1.12";
   const TAG = "glass-remote-card";
   const PICK_KEY = "glass-remote-card:pick:";
 
@@ -721,21 +728,20 @@
     /* picker header, 0.1.8: same layout as the typing sheet's header (title + thin close in a glass circle) */
     .sheet h3 { margin: 0; padding: 2px 0 10px 6px; font-size: 15px; font-weight: 600; color: #fff; display: flex; justify-content: space-between; align-items: center; }
     /* device picker, 0.1.10 (Grok Bot, 11 Oct 2026): dropdown anchored under the pill, grows downward.
-       Transparent full-screen catcher (tap anywhere outside the list, pill included, closes it); the shade starts
-       below the top row so the pill stays visible; rows are plain with hairline dividers and a left tick. */
-    .dd-bg { position: fixed; inset: 0; z-index: 20; visibility: hidden; pointer-events: none; transition: visibility 0s linear .28s; }
+       Rows are plain with hairline dividers and a left tick.
+       0.1.12 (Grok Bot, 11 Oct 2026): compact floating panel. What: the list itself is the frosted glass panel
+       (rounded corners, soft shadow), only as tall as its rows, scrolling only if it would run off the screen;
+       no full-page shade (the .dd-bg catcher is transparent, tap outside still closes) and no close button.
+       Why: the open dropdown covered the whole page; it should stop at its last row. */
+    .dd-bg { position: fixed; inset: 0; z-index: 20; background: transparent; visibility: hidden; pointer-events: none; transition: visibility 0s linear .28s; }
     .dd-bg.show { visibility: visible; pointer-events: auto; transition: none; }
-    .dd-shade { position: fixed; left: 0; right: 0; bottom: 0; top: var(--dd-top, 80px); background: rgba(0,0,0,.86);
-      -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); opacity: 0; transition: opacity .22s ease; pointer-events: none; }
-    .dd-bg.show .dd-shade { opacity: 1; }
-    .dd { position: fixed; top: var(--dd-top, 80px); left: var(--dd-left, 16px); width: var(--dd-width, calc(100vw - 32px));
-      max-height: calc(100dvh - var(--dd-top, 80px) - 16px); overflow-y: auto; overscroll-behavior: contain; padding: 2px 0 6px;
+    .dd { position: fixed; top: var(--dd-top, 80px); left: var(--dd-left, 16px); width: var(--dd-width, calc(100vw - 32px)); height: auto;
+      max-height: calc(100dvh - var(--dd-top, 80px) - 16px); overflow-y: auto; overscroll-behavior: contain; padding: 4px 0;
+      border-radius: 22px; ${PANEL} box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 12px 32px rgba(0,0,0,.45), 0 2px 6px rgba(0,0,0,.3);
       transform-origin: 50% 0; transform: translateY(-14px) scaleY(.7); opacity: 0;
       transition: transform .28s cubic-bezier(.2,.9,.3,1.08), opacity .18s ease; }
     .dd-bg.show .dd { transform: none; opacity: 1; }
-    .dd-x { position: absolute; top: 6px; right: 2px; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; --s: 14px; z-index: 1; }
-    .dd-x .icon { opacity: .8; }
-    .opt { width: 100%; display: flex; align-items: center; gap: 12px; padding: 0 44px 0 6px; min-height: 48px; text-align: left; font-size: 15px;
+    .opt { width: 100%; display: flex; align-items: center; gap: 12px; padding: 0 16px 0 14px; /* 0.1.12: inset inside the panel, no room kept for a close button */ min-height: 48px; text-align: left; font-size: 15px;
       border-top: .5px solid rgba(255,255,255,.14); transition: background .15s; }
     .opt:first-child { border-top: none; }
     .opt:active { background: rgba(255,255,255,.07); }
@@ -998,7 +1004,8 @@
             <button class="side glass" data-key="home" aria-label="Home">${icon("home")}</button>
           </div>
           <!-- 0.1.11 (Grok Bot, 11 Oct 2026): picker inside the card's layer so the raised top row can sit above its backdrop -->
-          <div class="dd-bg picker"><div class="dd-shade"></div><div class="dd" id="grc-picker" role="listbox" aria-label="Choose device"><button class="dd-x glass" data-act="close" aria-label="Close">${icon("close")}</button><div class="opts"></div></div></div>
+          <!-- 0.1.12 (Grok Bot, 11 Oct 2026): no full-page shade and no close button; the list is a compact glass panel -->
+          <div class="dd-bg picker"><div class="dd" id="grc-picker" role="listbox" aria-label="Choose device"><div class="opts"></div></div></div>
         </div>
         <div class="menu-bg"><div class="menu" role="menu"></div></div>
         <div class="toast" role="status" aria-live="polite"></div>

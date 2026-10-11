@@ -4,11 +4,23 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [0.1.11] - 2026-10-11
+## [0.1.12] - 2026-10-11
 
 First public release. Glass Remote Card is a frosted-glass touchpad remote for Home Assistant that follows whatever you're watching: Kodi, LG webOS, devices from the Apple TV integration, or any `media_player`. It has a touchpad, volume tabs, keyboard and dictation, a keyboard banner, sources, sound mode, a More menu, a CH control and input switching. It's a single file with no dependencies. Everything below was built and tested privately on the same day.
 
 Not affiliated with or endorsed by Apple Inc. Apple TV is a trademark of Apple Inc.
+
+### Changed
+- The device picker under the top pill is now a compact floating frosted-glass panel with rounded corners and a soft shadow. It is only as tall as its rows (Auto, your devices, Exit remote) and slides down from the pill. Before, the open dropdown darkened the whole page below the pill like a full-height sheet. The panel keeps the same width, the hairline dividers and the tick on the selected row, and it scrolls only if the rows would run past the bottom of the screen.
+- Tapping outside still closes the picker (a transparent full-screen catcher), but the page is no longer dimmed.
+
+### Removed
+- The picker's close button. Tap the pill again, tap outside, or press Escape to close it.
+
+### Unchanged
+- The sources, sound mode and More menus were already compact floating panels without a close button. The typing sheet keeps its close button.
+
+## [0.1.11] - 2026-10-11
 
 ### Fixed
 - The whole top pill (artwork, title, subtitle, chevron and padding) is now one tap target that opens the device picker. Before, on a real dashboard only a tap at the button's exact centre worked: the card's full-screen layer and the picker's backdrop are stacked inside the dashboard view, so another page layer above the card could take taps over the top row. The pill's children no longer take pointer events (the button is always the target, and the artwork can't be dragged), and a tap that lands on another page layer over the pill's area is routed to the pill (full-screen layout only; dialogs, links and form fields are left alone).

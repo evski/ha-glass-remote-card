@@ -192,7 +192,7 @@ function ptr(w, el, type, x = 100, y = 100) {
     m.$(".kb-sub").textContent === "Keyboard Input" && m.$(".kb .kb-x").classList.contains("glass") && !m.$(".kb .hint") &&
     [...m.card.shadowRoot.querySelectorAll(".kb .row button")].every((b) => b.classList.contains("glass")) &&
     m.$(".kb textarea").placeholder === "Type or dictate", m.$(".kb-title").textContent);
-  check("D17c picker keeps a thin glass close button", !!m.$(".picker .dd-x.glass"));
+  check("D17c picker has no close button (removed in 0.1.12, Grok Bot 11 Oct 2026); the typing sheet keeps its own", !m.$(".picker .dd-x") && !!m.$(".kb .kb-x.glass"));
   const ta = m.$(".kb textarea"); ta.value = "space"; ta.dispatchEvent(new w.Event("input")); await sleep(400);
   check("D18 Kodi: live Input.SendText done=false while typing", eq(m.hass.calls, [["kodi", "call_method", { entity_id: "media_player.kodi", method: "Input.SendText", text: "space", done: false }]]), m.hass.calls);
   ta.value = "space x"; ta.dispatchEvent(new w.Event("input"));
@@ -554,13 +554,43 @@ function ptr(w, el, type, x = 100, y = 100) {
     check("PK4 tapping the pill again closes it", !k.$(".picker").classList.contains("show") && !k.$(".pill").classList.contains("open"));
     k.$(".pill").click(); k.$(".picker").dispatchEvent(new w.MouseEvent("click", { bubbles: true }));
     check("PK5 tapping outside the list closes it", !k.$(".picker").classList.contains("show"));
-    k.$(".pill").click(); k.$(".picker .dd-x").click();
-    check("PK6 close button closes it", !k.$(".picker").classList.contains("show") && !k.$(".pill").classList.contains("open"));
+    // 0.1.12 (Grok Bot, 11 Oct 2026): the close button is gone; Escape is the third way to close (pill, outside, Escape)
+    k.$(".pill").click(); k.$(".picker .opt").dispatchEvent(new w.KeyboardEvent("keydown", { key: "Escape", bubbles: true, composed: true }));
+    check("PK6 no close button; Escape closes it", !k.$(".picker .dd-x") && !k.$('.picker [aria-label="Close"]') && !k.$('.picker [data-act="close"]') &&
+      !k.$(".picker").classList.contains("show") && !k.$(".pill").classList.contains("open"));
     check("PK7 no platform logo icons; neutral banner wording", !/mdi:apple/.test(JSON.stringify(Object.values(H.PLATFORMS).map((p) => p.icon))) &&
       !/iOS|Apple TV/.test(H.bannerText({ platform: "apple_tv" }, "Den").body));
     const src = fs.readFileSync(path.join(ROOT, "glass-remote-card.js"), "utf8");
     check("PK8 no design comparisons or trademark style names in the code", !/Liquid|Siri|iOS Remote|Apple's|Apple-style|Apple-TV-Remote|SF Pro|-apple-system|tvOS/.test(src));
     k.card.remove(); w.localStorage.clear();
+  }
+
+  // ---- DD: compact floating picker panel, no full-page sheet, no close button (0.1.12, Grok Bot 11 Oct 2026) ----
+  {
+    w.localStorage.clear();
+    const k = mount(w, CONFIG(), states({ "media_player.kodi": { attributes: { source_list: ["Movies", "TV"], source: "TV" } } }));
+    const css = k.$("style").textContent;
+    const rule = (sel) => { const m = css.match(new RegExp("\\n\\s*" + sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + " \\{([^}]*)\\}")); return m ? m[1] : ""; };
+    const dd = rule(".dd"), bg = rule(".dd-bg");
+    check("DD1 the list is the frosted glass panel: blur, rounded corners, soft shadow", /backdrop-filter: blur\(30px\)/.test(dd) && /border-radius: 22px/.test(dd) && /box-shadow:[^;]*0 12px 32px/.test(dd), dd);
+    check("DD2 panel is only as tall as its rows: height auto, no inset/bottom/min-height, scroll cap at the screen bottom only",
+      /height: auto/.test(dd) && !/inset:|bottom:|min-height/.test(dd) && /max-height: calc\(100dvh - var\(--dd-top, 80px\) - 16px\); overflow-y: auto/.test(dd), dd);
+    check("DD3 no full-page shade: no .dd-shade element or rule; catcher is transparent", !k.$(".dd-shade") && !/\.dd-shade/.test(css) && /background: transparent/.test(bg) && !/backdrop-filter/.test(bg), bg);
+    check("DD4 still grows down from the pill (top-anchored, slide-down transform)", /top: var\(--dd-top/.test(dd) && /transform-origin: 50% 0; transform: translateY\(-14px\) scaleY\(\.7\)/.test(dd));
+    check("DD5 no close button anywhere in the picker markup or CSS", !/\.dd-x/.test(css) && !k.$(".picker button:not(.opt)"));
+    k.$(".pill").click();
+    const rows = [...k.card.shadowRoot.querySelectorAll(".picker .dd > .opts > .opt")];
+    check("DD6 open panel holds only the rows (Auto, devices, Exit), hairlines between rows, tick on the selected row",
+      rows.length === 6 && k.$(".picker .dd").children.length === 1 && /\.opt \{[^}]*border-top: \.5px solid/.test(css) && /\.opt:first-child \{ border-top: none; \}/.test(css) &&
+      rows.filter((r) => r.querySelector(".tick").textContent === "\u2713").length === 1);
+    check("DD7 rows inset inside the panel (no space kept for a close button)", /\.opt \{ width: 100%; display: flex; align-items: center; gap: 12px; padding: 0 16px 0 14px;/.test(css));
+    // sources / sound mode / More: already compact floating menus, transparent catcher, no close button
+    const mrule = rule(".menu"), mbg = rule(".menu-bg");
+    check("DD8 other button menus are compact floating panels without a close button", !/background|backdrop-filter/.test(mbg) && /max-height: 56vh/.test(mrule) && /border-radius: 22px/.test(mrule) &&
+      !k.$('.menu [aria-label="Close"], .menu-bg [data-act="close"]'));
+    k.card._closeSheets(); k.card._openMenu("sources", k.$(".src"));
+    check("DD9 sources menu opens without a close button", k.$(".menu-bg").classList.contains("show") && !k.$('.menu [aria-label="Close"]') && !k.$(".menu .dd-x"));
+    k.card._closeMenu(); k.card.remove(); w.localStorage.clear();
   }
 
   // ---- PT: whole pill is one tap target; pill toggles the open picker (0.1.11, Grok Bot 11 Oct 2026) ----
@@ -591,8 +621,7 @@ function ptr(w, el, type, x = 100, y = 100) {
     k.$(".pill .l1").dispatchEvent(new w.MouseEvent("click", { bubbles: true, composed: true }));
     check("PT6 title tap toggles open then closed", o1 && !isOpen());
     pill.click(); k.$(".picker").dispatchEvent(new w.MouseEvent("click", { bubbles: true })); const outside = !isOpen();
-    pill.click(); k.$(".picker .dd-x").click();
-    check("PT7 tapping outside and the close button still close it (and lower the top row)", outside && !isOpen() && !k.$(".top").classList.contains("dd-open"));
+    check("PT7 tapping outside still closes it (and lowers the top row); no close button (0.1.12)", outside && !isOpen() && !k.$(".top").classList.contains("dd-open") && !k.$(".picker .dd-x"));
     pill.click(); k.$(".picker .opt").dispatchEvent(new w.KeyboardEvent("keydown", { key: "Escape", bubbles: true, composed: true }));
     check("PT8 keyboard: Escape closes and focus returns to the pill", !isOpen() && R.activeElement === pill);
     // a tap on a page layer stacked over the pill's area is routed to the pill (full-screen only)
