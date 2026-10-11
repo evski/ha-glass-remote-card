@@ -6,13 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [0.2.2] - 2026-10-11
 
+First release since v0.1.13. It also includes 0.2.0 and 0.2.1, which weren't released on their own (their full notes are in [CHANGELOG.md](https://github.com/evski/ha-glass-remote-card/blob/main/CHANGELOG.md)):
+- **Shortcuts (0.2.0).** Each player can have its own named service calls in the More (⋯) menu, shown only while that player is active. Use them for things like an add-on search, a favourite list or a scene. A **search** shortcut opens the typing sheet first and puts your text into the call (`{text}`, or URL-encoded `{text_url}`). A **call** shortcut runs straight away. See the README's Shortcuts section.
+- **Info button (0.2.1).** On players without a CH control (Kodi by default), the right-hand slot of the pad's bottom row is now an Info (i) button. `info_button: false` hides it.
+
 ### Changed
 - **No duplicate Info.** While a player shows the Info (i) button on the bottom row (players without CH, such as Kodi), Info is left out of that player's More (⋯) menu. This applies to the default list and to a custom `more:` list. Players with CH (Apple TV, LG webOS) have no Info button, so they keep Info in More. `info_button: false` puts it back in More.
 
 ## [0.2.1] - 2026-10-11
 
 ### Fixed
-- **Info button back on the remote.** Since 0.1.1, Info was only inside the More (⋯) menu, and on players without a CH control (Kodi by default) the right-hand slot of the pad's bottom row sat empty. That slot now holds an **Info** (i) button that sends the player's info key (Kodi `Input.Info`, LG `INFO`, `generic` with a `remote`). Players with CH keep CH there. Info also stays in every player's More menu.
+- **Info button back on the remote.** Since 0.1.1, Info was only inside the More (⋯) menu, and on players without a CH control (Kodi by default) the right-hand slot of the pad's bottom row sat empty. That slot now holds an **Info** (i) button that sends the player's info key (Kodi `Input.Info`, LG `INFO`, `generic` with a `remote`). Players with CH keep CH there. In 0.2.1 Info also stayed in every player's More menu; 0.2.2 removes that duplicate.
 - New player option `info_button: false` hides it.
 
 ## [0.2.0] - 2026-10-11
@@ -186,6 +190,5 @@ Not affiliated with or endorsed by Apple Inc. Apple TV is a trademark of Apple I
 - Text: keyboard and dictation text box, and the automatic "wants text" bar.
 - Look and feel: frosted glass styling, thin line icons, haptics.
 
-[0.1.2]: https://github.com/evski/ha-glass-remote-card/releases/tag/v0.1.2
-[0.1.1]: https://github.com/evski/ha-glass-remote-card/releases/tag/v0.1.1
-[0.1.0]: https://github.com/evski/ha-glass-remote-card/releases/tag/v0.1.0
+[0.2.2]: https://github.com/evski/ha-glass-remote-card/releases/tag/v0.2.2
+[0.1.13]: https://github.com/evski/ha-glass-remote-card/releases/tag/v0.1.13
