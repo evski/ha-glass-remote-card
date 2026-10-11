@@ -1,0 +1,22 @@
+name: Bug report
+description: Something doesn't work as described
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes: { label: Card version, description: "Shown in the browser console: GLASS-REMOTE-CARD x.y.z" }
+    validations: { required: true }
+  - type: input
+    id: ha
+    attributes: { label: Home Assistant version }
+    validations: { required: true }
+  - type: dropdown
+    id: platform
+    attributes: { label: Platform, options: [apple_tv, kodi, webostv, generic] }
+  - type: dropdown
+    id: client
+    attributes: { label: Where, options: [iOS app, Android app, Desktop browser, Mobile browser] }
+  - type: textarea
+    id: what
+    attributes: { label: What happened, description: "Steps, what you expected, and your card YAML (remove anything private)." }
+    validations: { required: true }

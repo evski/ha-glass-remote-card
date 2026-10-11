@@ -1,0 +1,26 @@
+# A complete "Remote" dashboard (raw configuration editor). Example entity ids - replace with yours.
+views:
+  - title: Remote
+    path: remote
+    icon: mdi:remote-tv
+    type: panel
+    cards:
+      - type: custom:glass-remote-card
+        players:
+          - entity: media_player.living_room_apple_tv
+            platform: apple_tv
+            remote: remote.living_room_apple_tv
+            keyboard_sensor: binary_sensor.living_room_apple_tv_keyboard_focus
+            volume_entity: media_player.receiver
+            volume_fallback: media_player.living_room_tv
+          - entity: media_player.kodi
+            platform: kodi
+            volume_entity: media_player.receiver
+          - entity: media_player.living_room_tv
+            platform: webostv
+        source_map:
+          entity: media_player.living_room_tv
+          sources:
+            "Apple TV": media_player.living_room_apple_tv
+            "Kodi": media_player.kodi
+          ignore_sources: ["AV Receiver"]

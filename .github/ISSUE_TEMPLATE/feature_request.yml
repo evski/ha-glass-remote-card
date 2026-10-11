@@ -1,0 +1,8 @@
+name: Feature request
+description: Ideas, new platforms, new buttons
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes: { label: What would you like?, description: "For a new device platform, list the integration and the services it offers." }
+    validations: { required: true }

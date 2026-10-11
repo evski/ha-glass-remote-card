@@ -1,0 +1,33 @@
+<!doctype html>
+<!-- Offline demo of glass-remote-card with a fake hass and made-up entities.
+     Used to render the README screenshots (scripts/screenshots.py). Service calls only log. -->
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>html,body{margin:0;background:#000;height:100%} .wrap{padding:24px;max-width:420px}</style></head>
+<body><script src="../../glass-remote-card.js"></script><script>
+const q = new URLSearchParams(location.search);
+const t = (m) => new Date(Date.now() - m * 60000).toISOString();
+const states = {
+  "media_player.living_room_apple_tv": { state: q.get("atv") || "idle", attributes: { friendly_name: "Living Room Apple TV", app_name: "TV", media_title: q.get("atv") === "playing" ? "Northern Lights" : undefined }, last_changed: t(30) },
+  "media_player.kodi": { state: q.get("kodi") || "playing", attributes: { friendly_name: "Kodi", media_series_title: "The Night Garden", media_title: "Episode 3", entity_picture: "poster.jpg" }, last_changed: t(5) },
+  "media_player.living_room_tv": { state: "on", attributes: { friendly_name: "Living Room TV", source: q.get("src") || "HDMI 2" }, last_changed: t(60) },
+  "media_player.bedroom_apple_tv": { state: "off", attributes: { friendly_name: "Bedroom Apple TV" }, last_changed: t(600) },
+  "media_player.receiver": { state: "on", attributes: { friendly_name: "Receiver", is_volume_muted: false }, last_changed: t(60) },
+  "binary_sensor.living_room_apple_tv_keyboard_focus": { state: q.get("kbd") || "off", attributes: {} },
+};
+const hass = { states, callService: (d, s, data) => { console.log("call", d, s, JSON.stringify(data)); return Promise.resolve(); } };
+const card = document.createElement("glass-remote-card");
+card.setConfig({
+  layout: q.get("layout") || "fullscreen",
+  players: [
+    { entity: "media_player.living_room_apple_tv", platform: "apple_tv", remote: "remote.living_room_apple_tv", config_entry_id: "x",
+      volume_entity: "media_player.receiver", keyboard_sensor: "binary_sensor.living_room_apple_tv_keyboard_focus" },
+    { entity: "media_player.kodi", platform: "kodi", volume_entity: "media_player.receiver" },
+    { entity: "media_player.living_room_tv", platform: "webostv", volume_entity: "media_player.receiver" },
+    { entity: "media_player.bedroom_apple_tv", platform: "apple_tv", remote: "remote.bedroom_apple_tv", volume_via_remote: true },
+  ],
+  source_map: { entity: "media_player.living_room_tv", sources: { "Apple TV": "media_player.living_room_apple_tv", "Kodi": "media_player.kodi" }, ignore_sources: ["HDMI 2"] },
+});
+if (q.get("layout") === "card") { const w = document.createElement("div"); w.className = "wrap"; w.appendChild(card); document.body.appendChild(w); }
+else document.body.appendChild(card);
+card.hass = hass;
+</script></body></html>
