@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.6] - unreleased
+
+### Changed
+- The mic button on the touchpad is removed by default. It opened the same text box as the keyboard button. The keyboard button and the automatic keyboard banner are unchanged. Set `show_mic: true` to bring the mic button back.
+
 ## [0.1.5] - unreleased
 
 ### Fixed

@@ -10,7 +10,7 @@ SHOTS = [  # name, query, viewport, safe-area (top, bottom), click
     ("remote-kodi", "", (393, 852), (59, 34), None),
     ("remote-apple-tv-wants-text", "?src=Apple%20TV&kodi=idle&kbd=on&atv=playing", (393, 852), (59, 34), None),
     ("picker", "", (393, 852), (59, 34), ".pill"),
-    ("keyboard", "?src=Apple%20TV&kodi=idle&atv=playing", (393, 852), (59, 34), ".mic"),
+    ("keyboard", "?src=Apple%20TV&kodi=idle&atv=playing", (393, 852), (59, 34), ".kbd"),
     ("sources-menu", "", (393, 852), (59, 34), ".src"),
     ("channels", "?src=Apple%20TV&kodi=idle&atv=playing", (393, 852), (59, 34), "row:"),
     ("more-menu", "", (393, 852), (59, 34), ".more"),
@@ -40,7 +40,7 @@ async def main():
                     await pg.locator("glass-remote-card").locator(click[4:]).first.click(); await pg.wait_for_timeout(400)
             elif click:
                 await pg.locator("glass-remote-card").locator(click).first.click(); await pg.wait_for_timeout(400)
-                if click == ".mic":
+                if click == ".kbd":
                     await pg.keyboard.type("northern lights"); await pg.wait_for_timeout(300)
             await pg.screenshot(path=str(OUT / f"{name}.png"))
             await ctx.close()

@@ -34,7 +34,7 @@ Single JavaScript file. No dependencies: no card-mod, browser_mod, kiosk-mode or
   - Play/pause, a big Back button and Home underneath. Long-press Back for the top menu and Home for the platform's extra action.
 - **Volume tabs on the pad's edge, like the Remote app.** Holding a tab repeats. Press and hold the speaker badge between the tabs to pick the receiver's **sound mode**. Volume can go to a receiver, with a fallback when the receiver is off, or through the Apple TV remote (HDMI-CEC/IR).
 - **Keyboard and dictation.**
-  - The keyboard and mic buttons open a text box.
+  - The keyboard button opens a text box (a separate mic button is available with `show_mic: true`).
   - On iPhone, tap the keyboard's mic key to dictate.
   - Text goes live to an Apple TV, LG or Kodi. Kodi gets `Input.SendText` with `done: false` while you type and `done: true` on Enter, so it lands in an add-on's search box.
 - **Keyboard notification.** When the Apple TV's keyboard-focus sensor turns on, an iOS-style banner slides down: "*Living Room Keyboard* / *Keyboard Input* / Enter text on your Apple TV using your iOS keyboard. Press to type." Tap it to type.
@@ -125,6 +125,7 @@ source_map:                               # optional: follow the TV's input
 | `players` | **required** | List of players (below). A plain entity id string also works. |
 | `layout` | `fullscreen` | `fullscreen`: a fixed, full-viewport remote that respects safe areas. `card`: a normal card. |
 | `pad_height` | `58dvh` | Touchpad height in full screen (Apple's proportion). It shrinks on small screens. |
+| `show_mic` | `false` | Show a separate mic button on the pad. It opens the same text box as the keyboard button. |
 | `channel_timeout` | `5000` | How long (ms) the open CH stack (up / CH / down) stays open without use before it folds back. `0` = never. |
 | `card_height` | `640px` | Height of the whole card in `card` layout. |
 | `pick_timeout` | `180` | Minutes a manual pick is kept before Auto takes over again. |
@@ -395,7 +396,7 @@ kiosk_mode:
 
 ## Limits
 
-- **Siri can't be triggered** from Home Assistant on an Apple TV. Use the mic button and your keyboard's dictation instead.
+- **Siri can't be triggered** from Home Assistant on an Apple TV. Use the keyboard button and your phone keyboard's dictation instead.
 - **A web page can't open the phone keyboard without a tap.** That's why the keyboard notification needs one tap.
 - **Apple TV info and subtitles both open tvOS's info panel.** There are no separate keys for them.
 - **LG rewind/fast-forward** change playback speed; they don't jump 10 seconds.

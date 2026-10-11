@@ -183,8 +183,9 @@ function ptr(w, el, type, x = 100, y = 100) {
   check("D16 no service call from picking", m.hass.calls.length === 0);
 
   // keyboard: Kodi sends on Send with done
-  m.$(".mic").click();
-  check("D17 mic opens the text box", m.$(".kb").classList.contains("show"));
+  check("D17a mic hidden by default (0.1.6), keyboard button kept", m.$(".mic").style.display === "none" && m.$(".kbd").style.display !== "none");
+  m.$(".kbd").click();
+  check("D17 keyboard button opens the text box", m.$(".kb").classList.contains("show"));
   const ta = m.$(".kb textarea"); ta.value = "space"; ta.dispatchEvent(new w.Event("input")); await sleep(400);
   check("D18 Kodi: live Input.SendText done=false while typing", eq(m.hass.calls, [["kodi", "call_method", { entity_id: "media_player.kodi", method: "Input.SendText", text: "space", done: false }]]), m.hass.calls);
   ta.value = "space x"; ta.dispatchEvent(new w.Event("input"));
@@ -328,7 +329,7 @@ function ptr(w, el, type, x = 100, y = 100) {
   m = mount(w, dcfg, AVRS);
   check("O8 bottom row order: sources | -10 | ... | +10 | CH", eq([...m.$(".inner").children].map((e) => e.className.split(" ")[0] || e.dataset.key), ["src", "skip_back", "more", "skip_fwd", "ch"]));
   check("O9 Kodi: CH slot hidden, sources + more shown", m.$(".ch").classList.contains("gone") && !m.$(".src").classList.contains("gone") && !m.$(".more").classList.contains("gone"));
-  check("O10 no separate info/subtitle buttons, mic still on the right edge", !m.$('.inner [data-key="info"]') && !!m.$(".mic"));
+  check("O10 no separate info/subtitle buttons, mic hidden by default", !m.$('.inner [data-key="info"]') && m.$(".mic").style.display === "none");
   m.$(".src").click(); await sleep(10);
   const mis = [...m.card.shadowRoot.querySelectorAll(".menu .mi")];
   check("O11 sources menu lists renamed sources, ticks the current one", m.$(".menu-bg").classList.contains("show") && eq(mis.map((b) => b.textContent), ["Kodi", "\u2713Apple TV"]), mis.map((b) => b.textContent));
@@ -402,6 +403,12 @@ function ptr(w, el, type, x = 100, y = 100) {
       check("CH17 collapsed CH shares the row's centre line: row buttons and the CH slot are both fixed 44px boxes, CH parts centred on it (0.1.5)",
         /\.inner > button \{ width: 44px; height: 44px; padding: 0; display: grid; place-items: center;/.test(cssT) && /\.ch \{ position: relative; width: 44px; height: 44px;/.test(cssT)
         && /\.ch \.chb\.up \{ transform: translateY\(-14px\)/.test(cssT) && /\.ch \.chb\.dn \{ transform: translateY\(14px\)/.test(cssT) && /\.ch > button \{ position: absolute; left: 50%; top: 50%;/.test(cssT));
+    }
+    {
+      const sm = mount(w, { ...CONFIG(), show_mic: true }, states());
+      check("MIC1 show_mic: true brings the mic back (opens the text box)", sm.$(".mic").style.display === "" && (sm.$(".mic").click(), sm.$(".kb").classList.contains("show")));
+      sm.card.remove();
+      check("MIC2 show_mic validation + default false", bad({ ...CONFIG(), show_mic: "yes" }) && H.normaliseConfig(CONFIG()).show_mic === false);
     }
     check("CH16 channel_timeout validation + default 5000", bad({ ...CONFIG(), channel_timeout: "5s" }) && bad({ ...CONFIG(), channel_timeout: -1 }) && H.normaliseConfig(CONFIG()).channel_timeout === 5000);
     w.localStorage.clear();

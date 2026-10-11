@@ -10,11 +10,13 @@
  * as on Apple's iOS Remote. Only the CH control changes: a compact "CH" with thin caps above and below
  * sits in the row; tapping it animates the caps out into an up/down chevron stack (channel up/down).
  * Tap CH again, or leave it ~5 s (`channel_timeout`), and it folds back. Replaces 0.1.3's hidden row.
+ * 0.1.6 (Grok Bot, 11 Oct 2026): the mic button is gone by default (it did the same as the keyboard
+ * button); `show_mic: true` brings it back.
  */
 (() => {
   "use strict";
 
-  const VERSION = "0.1.5";
+  const VERSION = "0.1.6";
   const TAG = "glass-remote-card";
   const PICK_KEY = "glass-remote-card:pick:";
 
@@ -232,6 +234,9 @@
       pad_height: "58dvh", card_height: "640px", ...config, players,
     };
     if (!["fullscreen", "card"].includes(out.layout)) throw new Error("glass-remote-card: layout must be fullscreen or card");
+    // show_mic (0.1.6, Grok Bot 11 Oct 2026): the mic button opened the same text box as the keyboard button
+    if (out.show_mic === undefined) out.show_mic = false;
+    if (typeof out.show_mic !== "boolean") throw new Error("glass-remote-card: show_mic must be true or false");
     // channel_timeout (0.1.4, Grok Bot 11 Oct 2026): ms before an expanded CH stack folds back; 0 = never
     if (out.channel_timeout === undefined) out.channel_timeout = 5000;
     if (typeof out.channel_timeout !== "number" || out.channel_timeout < 0) throw new Error("glass-remote-card: channel_timeout must be milliseconds (0 = never)");
@@ -1149,7 +1154,7 @@
       r.querySelector(".wants .t3").textContent = bt.body;
       r.querySelector(".wants").classList.toggle("show", wants);
       const textable = !!(PLATFORMS[p.platform].text(p, "x", false).length || (p.actions && p.actions.text));
-      r.querySelector(".mic").style.display = textable ? "" : "none";
+      r.querySelector(".mic").style.display = textable && this._config.show_mic ? "" : "none"; // 0.1.6: off by default
       r.querySelector(".kbd").style.display = textable ? "" : "none";
       // bottom row: sources | -10 | ... | +10 | CH (each slot keeps its place when hidden)
       r.querySelector(".src").classList.toggle("gone", !sourceMenu(p, this._states));
