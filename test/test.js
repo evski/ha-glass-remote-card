@@ -8,6 +8,7 @@ const path = require("path");
 const ROOT = path.join(__dirname, "..");
 const SRC = fs.readFileSync(path.join(ROOT, "glass-remote-card.js"), "utf8");
 const PKG = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+const SRC_NOW = () => fs.readFileSync(path.join(ROOT, "glass-remote-card.js"), "utf8");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let fails = 0, passes = 0;
 const check = (name, ok, extra = "") => { ok ? passes++ : fails++; console.log(`${ok ? "PASS" : "FAIL"} ${name}${!ok && extra ? "  -> " + JSON.stringify(extra) : ""}`); };
@@ -560,6 +561,63 @@ function ptr(w, el, type, x = 100, y = 100) {
     const src = fs.readFileSync(path.join(ROOT, "glass-remote-card.js"), "utf8");
     check("PK8 no design comparisons or trademark style names in the code", !/Liquid|Siri|iOS Remote|Apple's|Apple-style|Apple-TV-Remote|SF Pro|-apple-system|tvOS/.test(src));
     k.card.remove(); w.localStorage.clear();
+  }
+
+  // ---- PT: whole pill is one tap target; pill toggles the open picker (0.1.11, Grok Bot 11 Oct 2026) ----
+  {
+    w.localStorage.clear();
+    const k = mount(w, CONFIG(), states()); // Kodi active -> artwork <img> in the pill
+    const R = k.card.shadowRoot, css = k.$("style").textContent;
+    const isOpen = () => k.$(".picker").classList.contains("show");
+    const closeAll = () => { k.card._closeSheets(); };
+    const pill = k.$(".pill");
+    check("PT1 one button role: the pill is a <button type=button> with aria-haspopup, aria-expanded, aria-controls -> the list",
+      pill.tagName === "BUTTON" && pill.type === "button" && pill.getAttribute("aria-haspopup") === "listbox" && pill.getAttribute("aria-expanded") === "false" &&
+      pill.getAttribute("aria-controls") === "grc-picker" && R.getElementById("grc-picker") && R.getElementById("grc-picker").getAttribute("role") === "listbox" &&
+      !pill.querySelector("button, a, input, [role=button], [tabindex]"));
+    check("PT2 children never take pointer events (artwork, title, subtitle, chevron); artwork not draggable",
+      /\.pill > \*, \.pill \* \{ pointer-events: none; \}/.test(css) && /\.pill img \{ -webkit-user-drag: none;/.test(css) &&
+      !!k.$(".pill .art img") && k.$(".pill .art img").getAttribute("draggable") === "false");
+    const parts = { artwork: ".pill .art img", title: ".pill .l1", subtitle: ".pill .l2", chevron: ".pill .chev svg path", padding: ".pill" };
+    const opened = Object.entries(parts).filter(([, q]) => { closeAll(); k.$(q).dispatchEvent(new w.MouseEvent("click", { bubbles: true, composed: true })); return isOpen(); }).map(([n]) => n);
+    check("PT3 a tap on any part of the pill opens the picker", opened.length === 5, opened);
+    closeAll(); pill.click();
+    check("PT4 while open the top row sits above the backdrop (picker inside the card layer, z 21 > 20)",
+      k.$(".top").classList.contains("dd-open") && !!k.$(".root .picker") && /\.top\.dd-open \{ z-index: 21; \}/.test(css) && /\.top\.dd-open, \.top\.dd-open \.circle \{ pointer-events: none; \}/.test(css) && /\.top\.dd-open \.pill \{ pointer-events: auto; \}/.test(css) && /\.dd-bg \{ position: fixed; inset: 0; z-index: 20;/.test(css));
+    k.$(".pill .chev svg path").dispatchEvent(new w.MouseEvent("click", { bubbles: true, composed: true }));
+    check("PT5 tapping the pill (its chevron) while open closes it; chevron rotates back; aria-expanded false; top row lowered",
+      !isOpen() && !pill.classList.contains("open") && pill.getAttribute("aria-expanded") === "false" && !k.$(".top").classList.contains("dd-open"));
+    k.$(".pill .l1").dispatchEvent(new w.MouseEvent("click", { bubbles: true, composed: true })); const o1 = isOpen();
+    k.$(".pill .l1").dispatchEvent(new w.MouseEvent("click", { bubbles: true, composed: true }));
+    check("PT6 title tap toggles open then closed", o1 && !isOpen());
+    pill.click(); k.$(".picker").dispatchEvent(new w.MouseEvent("click", { bubbles: true })); const outside = !isOpen();
+    pill.click(); k.$(".picker .dd-x").click();
+    check("PT7 tapping outside and the close button still close it (and lower the top row)", outside && !isOpen() && !k.$(".top").classList.contains("dd-open"));
+    pill.click(); k.$(".picker .opt").dispatchEvent(new w.KeyboardEvent("keydown", { key: "Escape", bubbles: true, composed: true }));
+    check("PT8 keyboard: Escape closes and focus returns to the pill", !isOpen() && R.activeElement === pill);
+    // a tap on a page layer stacked over the pill's area is routed to the pill (full-screen only)
+    pill.getBoundingClientRect = () => ({ left: 80, right: 310, top: 14, bottom: 78, width: 230, height: 64 });
+    const cover = w.document.createElement("div"); w.document.body.appendChild(cover);
+    const tap = (el, x, y) => { const e = new w.MouseEvent("click", { bubbles: true, composed: true, cancelable: true, clientX: x, clientY: y }); el.dispatchEvent(e); return e; };
+    const e1 = tap(cover, 195, 46);
+    check("PT9 tap on a layer over the pill opens the picker and is consumed", isOpen() && e1.defaultPrevented);
+    tap(cover, 300, 46);
+    check("PT10 another tap there (over the chevron) closes it", !isOpen() && !pill.classList.contains("open"));
+    tap(cover, 195, 300); const dlg = w.document.createElement("ha-dialog"); w.document.body.appendChild(dlg); tap(dlg, 195, 46);
+    check("PT11 taps elsewhere on the page or in a dialog are left alone", !isOpen());
+    dlg.remove();
+    k.card.remove(); tap(cover, 195, 46);
+    check("PT12 routing removed when the card is removed", !isOpen());
+    const c2 = mount(w, { ...CONFIG(), layout: "card" }, states());
+    c2.$(".pill").getBoundingClientRect = () => ({ left: 80, right: 310, top: 14, bottom: 78, width: 230, height: 64 });
+    tap(cover, 195, 46);
+    check("PT13 card layout: no routing (only the full-screen remote owns the top of the screen)", !c2.$(".picker").classList.contains("show"));
+    c2.$(".pill .art").dispatchEvent(new w.MouseEvent("click", { bubbles: true, composed: true }));
+    check("PT14 card layout: whole pill still opens it", c2.$(".picker").classList.contains("show"));
+    c2.card.remove(); cover.remove();
+    check("PT15 no trademark wording in the card source beyond the factual integration name",
+      !/SF Symbols|Safari|Liquid|Siri|tvOS|iPadOS|iPhone|-apple-system/.test(SRC_NOW()) && !/Apple(?! TV| Inc)/.test(SRC_NOW()));
+    w.localStorage.clear();
   }
 
   // ---- LAY: tablet / wide layout (0.1.9, Grok Bot 11 Oct 2026) ----

@@ -4,11 +4,20 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [0.1.10] - 2026-10-11
+## [0.1.11] - 2026-10-11
 
 First public release. Glass Remote Card is a frosted-glass touchpad remote for Home Assistant that follows whatever you're watching: Kodi, LG webOS, devices from the Apple TV integration, or any `media_player`. It has a touchpad, volume tabs, keyboard and dictation, a keyboard banner, sources, sound mode, a More menu, a CH control and input switching. It's a single file with no dependencies. Everything below was built and tested privately on the same day.
 
 Not affiliated with or endorsed by Apple Inc. Apple TV is a trademark of Apple Inc.
+
+### Fixed
+- The whole top pill (artwork, title, subtitle, chevron and padding) is now one tap target that opens the device picker. Before, on a real dashboard only a tap at the button's exact centre worked: the card's full-screen layer and the picker's backdrop are stacked inside the dashboard view, so another page layer above the card could take taps over the top row. The pill's children no longer take pointer events (the button is always the target, and the artwork can't be dragged), and a tap that lands on another page layer over the pill's area is routed to the pill (full-screen layout only; dialogs, links and form fields are left alone).
+- Tapping the pill while the picker is open now closes it, and the chevron turns back. The picker sits inside the card's own layer, and the top row is raised above its backdrop while it is open. Tapping outside the list and the close button still close it.
+
+### Added
+- Keyboard: the pill stays a single button with `aria-haspopup`, `aria-expanded` and `aria-controls` pointing at the list, and Escape closes the picker and returns focus to the pill.
+
+## [0.1.10] - 2026-10-11
 
 ### Changed
 - Neutral naming throughout. The style is now called "frosted glass", and comparisons to other companies' designs are gone from the code, docs and tests.
@@ -59,7 +68,7 @@ Not affiliated with or endorsed by Apple Inc. Apple TV is a trademark of Apple I
 
 ### Changed
 - The pad's bottom row (sources | -10 | ⋯ | +10 | CH) is always shown again. 0.1.3's hide/show toggle and its `bottom_row` option are gone.
-- New CH control. Collapsed, it is a compact "CH" in line with the row, with thin caps above and below. Tapping it expands it into a stack that rises above the row: up chevron, CH, down chevron. The caps slide outward and turn into the chevrons in about 200 ms (CSS transitions, so it works in mobile Safari).
+- New CH control. Collapsed, it is a compact "CH" in line with the row, with thin caps above and below. Tapping it expands it into a stack that rises above the row: up chevron, CH, down chevron. The caps slide outward and turn into the chevrons in about 200 ms (CSS transitions, so it works in mobile browsers).
 - Collapsed, a tap only expands the stack and sends no command. Expanded, the chevrons send channel up/down. Tap CH again to fold it back; it also folds back after 5 s without use.
 - Players without channel keys (e.g. Kodi) hide the CH slot again.
 - Row positions tuned on a real phone.

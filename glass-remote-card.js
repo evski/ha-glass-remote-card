@@ -32,16 +32,24 @@
  * The pill's chevron turns from > to v; rows are plain (tick, small device icon, name) with hairline dividers;
  * Auto and Exit remote stay as rows; a thin close button sits at the list's top right; tapping outside or on
  * the pill closes it. The list spans the top row (the column on tablets).
+ * 0.1.11 (Grok Bot, 11 Oct 2026): the whole top pill is one tap target. A live test showed taps on the
+ * middle of the pill and on its chevron did not open the picker; only a click on the button's exact centre
+ * did. Root cause: the card's full-screen layer and the picker backdrop are stacked inside the dashboard
+ * view, so a layer above the card (and, while open, our own backdrop) received taps over the top row.
+ * Fix: the pill's children (artwork, title, subtitle, chevron) never take pointer events, so the button
+ * itself is always the target; the picker now lives inside the card's own layer with the top row raised
+ * above its backdrop, so tapping the pill toggles it closed; and taps that land on a foreign layer over the
+ * pill's area are routed to the pill. One button (aria-haspopup, aria-expanded, aria-controls); Escape closes.
  */
 (() => {
   "use strict";
 
-  const VERSION = "0.1.10";
+  const VERSION = "0.1.11";
   const TAG = "glass-remote-card";
   const PICK_KEY = "glass-remote-card:pick:";
 
   // ---------------------------------------------------------------------------
-  // Icons: thin-stroke 24x24 line icons in the spirit of SF Symbols.
+  // Icons: thin-stroke 24x24 line icons with rounded caps and joins.
   // ---------------------------------------------------------------------------
   const svg = (body, sw = 1.6) =>
     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" ` +
@@ -85,7 +93,7 @@
   };
 
   // CH control (0.1.4, Grok Bot 11 Oct 2026): each glyph holds the collapsed thin cap and the open
-  // chevron; CSS cross-fades and moves them, so it works on mobile Safari (no CSS path morphing there).
+  // chevron; CSS cross-fades and moves them, so it works in mobile WebKit browsers (no CSS path morphing there).
   const CH_UP = '<svg viewBox="4 4.5 16 9" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="cap" stroke-width="1.6" d="M6.2 10.6 10.8 8.4Q12 7.8 13.2 8.4L17.8 10.6"/><path class="chev" stroke-width="2" d="M6.5 12 12 6.5l5.5 5.5"/></svg>';
   const CH_DOWN = '<svg viewBox="4 4.5 16 9" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="cap" stroke-width="1.6" d="M6.2 7.4 10.8 9.6Q12 10.2 13.2 9.6L17.8 7.4"/><path class="chev" stroke-width="2" d="M6.5 6.5 12 12l5.5-5.5"/></svg>';
 
@@ -738,6 +746,16 @@
     .opt .l2 { display: none; }
     .pill .chev { transition: transform .25s cubic-bezier(.2,.9,.3,1.1); }
     .pill.open .chev { transform: rotate(90deg); }
+    /* 0.1.11 (Grok Bot, 11 Oct 2026): the whole pill is one tap target. Children (artwork img / ha-icon, title,
+       subtitle, chevron svg) never take pointer events, so every tap anywhere on the pill hits the button itself
+       (no image drag or long-press callout, no inner element eating the tap). While the picker is open the
+       top row sits above the picker's backdrop, so tapping the pill toggles it closed. */
+    .pill > *, .pill * { pointer-events: none; }
+    .pill img { -webkit-user-drag: none; user-drag: none; -webkit-touch-callout: none; }
+    .top { position: relative; z-index: 1; }
+    .top.dd-open { z-index: 21; }
+    .top.dd-open, .top.dd-open .circle { pointer-events: none; } /* mute / power / gaps fall through to the backdrop (closes) while open */
+    .top.dd-open .pill { pointer-events: auto; }
     /* typing sheet, 0.1.7 (Grok Bot, 11 Oct 2026): same frosted glass as the keyboard banner and menus,
        banner-style header, thin close icon, glass pill buttons, no accent-coloured text links */
     .kb-head { display: flex; align-items: center; gap: 12px; padding: 0 0 12px; }
@@ -798,10 +816,13 @@
       if (this._config && !this._built) this._build();
       if (!this._onVis) { this._onVis = () => this._syncKbPoll(); }
       document.addEventListener("visibilitychange", this._onVis);
+      if (!this._onStrayTap) this._onStrayTap = (e) => this._routeStrayTap(e);
+      window.addEventListener("click", this._onStrayTap, true);
       if (this._hass) this._update();
     }
     disconnectedCallback() {
       document.removeEventListener("visibilitychange", this._onVis);
+      window.removeEventListener("click", this._onStrayTap, true);
       this._stopKbPoll();
       for (const t of this._timers) { clearTimeout(t); clearInterval(t); } this._timers.clear();
     }
@@ -947,7 +968,7 @@
           </button>
           <div class="top">
             <button class="circle glass" data-key="mute" aria-label="Mute">${icon("mute")}</button>
-            <button class="pill glass" data-act="picker" aria-label="Choose device" aria-haspopup="listbox" aria-expanded="false">
+            <button type="button" class="pill glass" data-act="picker" aria-label="Choose device" aria-haspopup="listbox" aria-expanded="false" aria-controls="grc-picker">
               <span class="art"></span>
               <span class="lines"><span class="l1"></span><span class="l2"></span></span>
               <span class="icon chev">${ICONS.chevron}</span>
@@ -976,10 +997,11 @@
             <button class="big glass" data-key="back" aria-label="Back">${icon("back")}</button>
             <button class="side glass" data-key="home" aria-label="Home">${icon("home")}</button>
           </div>
+          <!-- 0.1.11 (Grok Bot, 11 Oct 2026): picker inside the card's layer so the raised top row can sit above its backdrop -->
+          <div class="dd-bg picker"><div class="dd-shade"></div><div class="dd" id="grc-picker" role="listbox" aria-label="Choose device"><button class="dd-x glass" data-act="close" aria-label="Close">${icon("close")}</button><div class="opts"></div></div></div>
         </div>
         <div class="menu-bg"><div class="menu" role="menu"></div></div>
         <div class="toast" role="status" aria-live="polite"></div>
-        <div class="dd-bg picker"><div class="dd-shade"></div><div class="dd" role="listbox" aria-label="Choose device"><button class="dd-x glass" data-act="close" aria-label="Close">${icon("close")}</button><div class="opts"></div></div></div>
         <div class="sheet-bg kb"><div class="sheet">
           <div class="kb-head"><span class="appicon">${REMOTE_GLYPH}</span>
             <span class="kb-txt"><span class="kb-title">Type</span><span class="kb-sub">Keyboard Input</span></span>
@@ -990,8 +1012,30 @@
       this._built = true;
     }
 
+    /** 0.1.11 (Grok Bot, 11 Oct 2026): full-screen layout only. A tap that lands on some other page layer
+     *  stacked over the pill's area (the card's layer sits inside the dashboard view, so a header or overlay
+     *  above it can take the hit) is routed to the pill. Taps inside the card, dialogs and controls are left alone. */
+    _routeStrayTap(e) {
+      if (!this._built || !this._config || this._config.layout !== "fullscreen" || !this.isConnected) return;
+      const path = e.composedPath ? e.composedPath() : [];
+      if (path.includes(this)) return; // the card handles its own taps
+      const busy = path.some((n) => n && n.nodeType === 1 && (/^(DIALOG|HA-DIALOG|HA-MORE-INFO-DIALOG|HA-MD-DIALOG|INPUT|TEXTAREA|SELECT|A)$/.test(n.tagName) ||
+        (n.getAttribute && /^(dialog|alertdialog)$/.test(n.getAttribute("role") || ""))));
+      if (busy) return;
+      const pill = this.shadowRoot.querySelector(".pill");
+      const b = pill && pill.getBoundingClientRect ? pill.getBoundingClientRect() : null;
+      if (!b || !b.width || !b.height) return;
+      if (e.clientX < b.left || e.clientX > b.right || e.clientY < b.top || e.clientY > b.bottom) return;
+      e.preventDefault(); e.stopPropagation();
+      this._act("picker");
+    }
+
     _wire() {
       const r = this.shadowRoot;
+      // 0.1.11: Escape closes the picker and gives focus back to the pill
+      r.querySelector(".root").addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && r.querySelector(".picker").classList.contains("show")) { e.preventDefault(); this._closeSheets(); r.querySelector(".pill").focus(); }
+      });
       // Buttons with a key: tap; data-repeat = hold to repeat; long press = <key>_hold if the platform has it.
       r.querySelectorAll("[data-key]").forEach((b) => this._wireButton(b, b.dataset.key, b.hasAttribute("data-repeat")));
       r.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); this._act(b.dataset.act); }));
@@ -1156,6 +1200,7 @@
         if (r.querySelector(".picker").classList.contains("show")) { this._closeSheets(); return; } // tapping the pill again closes it
         this._renderPicker(); this._placePicker();
         r.querySelector(".picker").classList.add("show"); r.querySelector(".pill").classList.add("open");
+        r.querySelector(".top").classList.add("dd-open"); // 0.1.11: pill stays above the backdrop
         r.querySelector(".pill").setAttribute("aria-expanded", "true");
       }
       else if (act === "close") this._closeSheets();
@@ -1170,7 +1215,7 @@
         r.querySelector(".kb-title").textContent = p ? (p.name || this._friendly(p)) : "Type"; // 0.1.7: banner-style header (name / "Keyboard Input")
         const ta = r.querySelector(".kb textarea"); ta.value = ""; this._kbText = "";
         r.querySelector(".kb").classList.add("show");
-        ta.focus(); // mobile Safari only raises the keyboard if this runs inside the tap, which it does
+        ta.focus(); // mobile WebKit only raises the keyboard if this runs inside the tap, which it does
       }
       else if (act === "kb-clear") { const ta = r.querySelector(".kb textarea"); ta.value = ""; this._kbText = ""; this.sendText("", false); ta.focus(); }
       else if (act === "kb-send") {
@@ -1218,6 +1263,7 @@
       const r = this.shadowRoot;
       r.querySelectorAll(".sheet-bg, .dd-bg").forEach((s) => s.classList.remove("show")); this._kbSheetFor = null;
       const pill = r.querySelector(".pill"); if (pill) { pill.classList.remove("open"); pill.setAttribute("aria-expanded", "false"); }
+      const top = r.querySelector(".top"); if (top) top.classList.remove("dd-open"); // 0.1.11
     }
     /** 0.1.10: put the dropdown straight under the top row, spanning it (the column on tablets). */
     _placePicker() {
@@ -1232,7 +1278,7 @@
     _friendly(p) { const st = this._states[p.entity]; return p.name || (st && st.attributes && st.attributes.friendly_name) || p.entity; }
 
     _artHtml(p, art) {
-      if (art) return `<img src="${esc(art)}" alt="">`;
+      if (art) return `<img src="${esc(art)}" alt="" draggable="false">`;
       const ic = p.icon || PLATFORMS[p.platform].icon;
       return customElements.get("ha-icon") ? `<ha-icon icon="${esc(ic)}"></ha-icon>` : icon("tv");
     }
