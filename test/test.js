@@ -535,6 +535,25 @@ function ptr(w, el, type, x = 100, y = 100) {
     w.localStorage.clear();
   }
 
+  // ---- LAY: tablet / wide layout (0.1.9, Grok Bot 11 Oct 2026) ----
+  {
+    const n = H.normaliseConfig(CONFIG());
+    check("LAY1 defaults: column_ratio 0.52, max_width 100vw", n.column_ratio === 0.52 && n.max_width === "100vw");
+    check("LAY2 max_width number -> px; CSS length kept", H.normaliseConfig({ ...CONFIG(), max_width: 560 }).max_width === "560px" && H.normaliseConfig({ ...CONFIG(), max_width: "34rem" }).max_width === "34rem");
+    const bad = (c) => { try { H.normaliseConfig({ ...CONFIG(), ...c }); return false; } catch (e) { return true; } };
+    check("LAY3 bad column_ratio / max_width rejected", bad({ column_ratio: 0 }) && bad({ column_ratio: "wide" }) && bad({ column_ratio: 5 }) && bad({ max_width: "" }) && !bad({ column_ratio: 0.6 }));
+    const l = mount(w, { ...CONFIG(), max_width: 600, column_ratio: 0.5 }, states());
+    const st = l.$(".root").getAttribute("style");
+    check("LAY4 column vars on the root", /--grc-col-ratio:0\.5/.test(st) && /--grc-max-w:600px/.test(st), st);
+    const css = l.$("style").textContent;
+    check("LAY5 wide screens only (min-aspect-ratio 3/5): centred column from ratio x height capped by max_width, pad fills height, bottom row clustered",
+      /@media \(min-aspect-ratio: 3\/5\)/.test(css) && /--grc-col: min\(calc\(100vw - 32px\), max\(320px, calc\(100dvh \* var\(--grc-col-ratio/.test(css) &&
+      /var\(--grc-max-w, 100vw\)/.test(css) && /\.root\.fullscreen \.pad-wrap \{ flex: 1 1 auto; height: auto;/.test(css) && /\.root\.fullscreen \.bottom \{ margin-top: 0; justify-content: center;/.test(css));
+    check("LAY6 phone rules untouched outside the media query", /\.pad-wrap \{ position: relative; margin-top: 18px; flex: 0 1 auto; height: var\(--grc-pad-height\)/.test(css) &&
+      /\.bottom \{ flex: 0 0 auto; margin-top: auto; padding-top: 28px; display: flex; align-items: center; justify-content: space-between;/.test(css));
+    l.card.remove(); w.localStorage.clear();
+  }
+
   // ---- FOC: keyboard focus gating + glass hint (0.1.8, Grok Bot 11 Oct 2026) ----
   {
     w.localStorage.clear();

@@ -29,8 +29,8 @@ gh repo edit evski/ha-glass-remote-card --enable-discussions --enable-issues
 Then check that the **HACS validation** and **Tests** workflows pass on `main`.
 
 ## 3. First release
-1. Make sure `const VERSION` in `glass-remote-card.js`, `package.json` and the `## [x.y.z]` heading in `CHANGELOG.md` all match. Change "unreleased" to the date.
-2. `git tag v0.1.0 && git push origin v0.1.0`. The **Release** workflow runs the tests, checks the version and publishes the release with the JS attached.
+1. Make sure `const VERSION` in `glass-remote-card.js`, `package.json` and the `## [x.y.z]` heading in `CHANGELOG.md` all match. Change "unreleased" to the date (done for 0.1.9: 2026-10-11).
+2. `git tag v0.1.9 && git push origin v0.1.9`. The **Release** workflow runs the tests, checks the version and publishes the release with the JS attached.
 
 ## 4. Getting it found
 - Post in the Home Assistant Community forum (Dashboards & Frontend → Custom cards) with screenshots, and set the repo homepage to that thread.

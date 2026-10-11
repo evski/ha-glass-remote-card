@@ -11,9 +11,10 @@ One card drives your Apple TVs, Kodi, LG webOS TVs and any other `media_player`:
 
 **Nothing else to install.** It's a single JavaScript file. You don't need any other custom cards, HACS add-ons or Home Assistant add-ons: no card-mod, browser_mod, kiosk-mode, template helpers or extra scripts. It only uses Home Assistant's built-in integrations for your devices: [Apple TV](https://www.home-assistant.io/integrations/apple_tv/), [Kodi](https://www.home-assistant.io/integrations/kodi/) and [LG webOS TV](https://www.home-assistant.io/integrations/webostv/). Any other `media_player` works through its standard services.
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/evski/ha-glass-remote-card/main/docs/images/demo.gif" width="300" alt="Demo: the artwork pill, picking a player, touchpad swipes and taps, the CH control opening and closing, the keyboard banner and typing, and the volume tabs">
-</p>
+<table align="center"><tr>
+<td align="center"><img src="https://raw.githubusercontent.com/evski/ha-glass-remote-card/main/docs/images/real-kodi.gif" width="280" alt="Screen recording on a real iPhone: touchpad taps on Kodi, the typing sheet sending 'hello', the keyboard banner, the sources menu and More then Sound Mode"><br><sub><b>On a real iPhone</b> (Kodi)</sub></td>
+<td align="center"><img src="https://raw.githubusercontent.com/evski/ha-glass-remote-card/main/docs/images/demo.gif" width="280" alt="Demo: the artwork pill, picking a player, touchpad swipes and taps, the CH control opening and closing, the keyboard banner and typing, and the volume tabs"><br><sub>Demo with placeholder devices</sub></td>
+</tr></table>
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/evski/ha-glass-remote-card/main/docs/images/remote-kodi.png" width="240" alt="Remote controlling Kodi, with artwork in the top pill">
@@ -24,7 +25,7 @@ One card drives your Apple TVs, Kodi, LG webOS TVs and any other `media_player`:
 ## Features
 
 - **Looks like Apple's Remote app.** Liquid Glass buttons, thin line icons, a big touchpad and Apple's proportions.
-- **Full screen with safe areas.** The card fills the screen and respects the notch and home indicator on any phone. There's no hard-coded height. Use `layout: card` to place it inside a normal dashboard instead.
+- **Full screen with safe areas.** The card fills the screen and respects the notch and home indicator on any phone. There's no hard-coded height. Use `layout: card` to place it inside a normal dashboard instead. On an iPad or other wide screen it keeps the phone's proportions in a centred column, like Apple's iPad Remote (see `column_ratio` and `max_width`).
 - **Follows what you're watching.** Priority order:
   - A device you picked yourself, kept for a few hours.
   - Your TV's input, mapped to a player. An app running on the TV selects the TV itself.
@@ -130,6 +131,8 @@ source_map:                               # optional: follow the TV's input
 | `players` | **required** | List of players (below). A plain entity id string also works. |
 | `layout` | `fullscreen` | `fullscreen`: a fixed, full-viewport remote that respects safe areas. `card`: a normal card. |
 | `pad_height` | `58dvh` | Touchpad height in full screen (Apple's proportion). It shrinks on small screens. |
+| `column_ratio` | `0.52` | Tablets and other wide screens: the full-screen remote becomes a centred column this many times the screen height wide (Apple's iPad Remote is about 0.51), and the touchpad fills the height. Phones aren't affected. |
+| `max_width` | – | Caps that column's width, for example `560` or `560px`. |
 | `show_mic` | `false` | Show a separate mic button on the pad. It opens the same text box as the keyboard button. |
 | `channel_timeout` | `5000` | How long (ms) the open CH stack (up / CH / down) stays open without use before it folds back. `0` = never. |
 | `card_height` | `640px` | Height of the whole card in `card` layout. |
@@ -387,9 +390,7 @@ You can put the remote one swipe away in Control Center, like Apple's own Remote
 
 Tapping the control now opens the Home Assistant app straight on the remote.
 
-<!-- Screen recording slot: docs/images/control-center.gif (to be added by the maintainer; not generated). When it exists, uncomment:
-<p align="center"><img src="https://raw.githubusercontent.com/evski/ha-glass-remote-card/main/docs/images/control-center.gif" width="300" alt="Adding the Remote shortcut to Control Center and opening the remote"></p>
--->
+<p align="center"><img src="https://raw.githubusercontent.com/evski/ha-glass-remote-card/main/docs/images/control-center.gif" width="300" alt="Real iPhone: opening the remote from Control Center, then the device picker, More, Sound Mode and the CH control"><br><sub>On a real iPhone: Control Center → Remote. Personal tiles are blurred.</sub></p>
 
 **Why not a URL shortcut?** A Shortcut with **Open URL** `homeassistant://navigate/...` looks simpler, but it isn't reliable: if the app is closed or was suspended, iOS often launches it on its default page and the navigate part is lost, or a Safari hop is shown first. **Open Page** is the companion app's own action, so it always lands on the right dashboard.
 

@@ -22,11 +22,14 @@
  * Apple TV's, or Kodi's keyboard window seen by the poll), the keyboard button only opens the typing sheet
  * while a field is focused; otherwise it shows a short glass hint. The sheet closes when focus drops.
  * Text service calls are made with HA's error toast turned off; a failure shows one glass hint instead.
+ * 0.1.9 (Grok Bot, 11 Oct 2026): tablet / wide layout like Apple's iPad Remote. On wide screens the full-screen
+ * remote is a centred column with phone proportions (width = column_ratio x height, capped by max_width),
+ * the touchpad grows to fill the height and the bottom three buttons cluster in the middle. Phones unchanged.
  */
 (() => {
   "use strict";
 
-  const VERSION = "0.1.8";
+  const VERSION = "0.1.9";
   const TAG = "glass-remote-card";
   const PICK_KEY = "glass-remote-card:pick:";
 
@@ -252,8 +255,13 @@
     });
     const out = {
       layout: "fullscreen", haptics: true, pick_timeout: 180, exit_path: "/", show_exit: true,
-      pad_height: "58dvh", card_height: "640px", ...config, players,
+      pad_height: "58dvh", card_height: "640px", column_ratio: 0.52, max_width: "100vw", ...config, players,
     };
+    // 0.1.9 (Grok Bot, 11 Oct 2026): wide-screen column. column_ratio = column width / screen height (Apple's iPad Remote ~0.51);
+    // max_width caps it (any CSS length, or a number of px).
+    if (typeof out.column_ratio !== "number" || !(out.column_ratio > 0) || out.column_ratio > 2) throw new Error("glass-remote-card: column_ratio must be a number between 0 and 2 (e.g. 0.52)");
+    if (typeof out.max_width === "number") out.max_width = out.max_width + "px";
+    if (typeof out.max_width !== "string" || !out.max_width) throw new Error("glass-remote-card: max_width must be a CSS length like 560px");
     if (!["fullscreen", "card"].includes(out.layout)) throw new Error("glass-remote-card: layout must be fullscreen or card");
     // show_mic (0.1.6, Grok Bot 11 Oct 2026): the mic button opened the same text box as the keyboard button
     if (out.show_mic === undefined) out.show_mic = false;
@@ -653,6 +661,20 @@
     .bottom .side { width: 82px; height: 82px; border-radius: 50%; display: grid; place-items: center; --s: 34px; }
     .bottom .big { width: 106px; height: 106px; border-radius: 50%; display: grid; place-items: center; --s: 44px; }
 
+    /* 0.1.9 tablet / wide layout (Grok Bot, 11 Oct 2026), like Apple's iPad Remote: when the screen is wider than
+       3:5, keep phone proportions in a centred column (width = column_ratio x height, at least 320px, capped by
+       max_width), let the pad fill the height, and cluster the bottom three buttons under it. Phones (narrower
+       than 3:5) never match, so they are unchanged. The volume tabs hang off the pad, so they follow the column. */
+    @media (min-aspect-ratio: 3/5) {
+      .root.fullscreen {
+        --grc-col: min(calc(100vw - 32px), max(320px, calc(100dvh * var(--grc-col-ratio, .52))), var(--grc-max-w, 100vw));
+        padding-left: max(calc(16px + env(safe-area-inset-left, 0px)), calc((100vw - var(--grc-col)) / 2));
+        padding-right: max(calc(16px + env(safe-area-inset-right, 0px)), calc((100vw - var(--grc-col)) / 2)); }
+      .root.fullscreen .pad-wrap { flex: 1 1 auto; height: auto; min-height: 240px; }
+      .root.fullscreen .bottom { margin-top: 0; justify-content: center; gap: clamp(24px, 4.5vw, 40px); }
+      .root.fullscreen .wants { left: calc((100vw - var(--grc-col)) / 2); right: calc((100vw - var(--grc-col)) / 2); }
+    }
+
     /* glass hint, 0.1.8 (Grok Bot, 11 Oct 2026): one small toast in the card's own glass, replaces HA's grey toasts for text errors */
     .toast { position: fixed; z-index: 40; left: 50%; top: 42%; width: max-content; max-width: calc(100vw - 72px);
       padding: 12px 18px; border-radius: 20px; font-size: 15px; font-weight: 500; line-height: 1.3; text-align: center; pointer-events: none; ${PANEL}
@@ -891,7 +913,7 @@
       const c = this._config;
       const root = this.shadowRoot;
       root.innerHTML = `<style>${CSS}</style>
-        <div class="root ${c.layout}" style="--grc-pad-height:${esc(c.pad_height)};--grc-card-height:${esc(c.card_height)}">
+        <div class="root ${c.layout}" style="--grc-pad-height:${esc(c.pad_height)};--grc-card-height:${esc(c.card_height)};--grc-col-ratio:${esc(c.column_ratio)};--grc-max-w:${esc(c.max_width)}">
           <button class="wants" data-act="keyboard" aria-live="polite">
             <span class="appicon">${REMOTE_GLYPH}</span>
             <span class="txt"><span class="t1"></span><span class="t2">Keyboard Input</span><span class="t3"></span></span>

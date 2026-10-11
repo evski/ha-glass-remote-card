@@ -4,7 +4,17 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [0.1.8] - unreleased
+## [0.1.9] - 2026-10-11
+
+First public release. Glass Remote Card is an Apple TV Remote-style Liquid Glass remote for Home Assistant that follows whatever you're watching: Apple TV, Kodi, LG webOS or any `media_player`. It has a touchpad, volume tabs, keyboard and dictation, a keyboard banner, sources, sound mode, a More menu, Apple's CH control and input switching. It's a single file with no dependencies. Everything up to 0.1.8 below was built and tested privately on the same day; this release adds the changes listed here.
+
+### Added
+- Tablet and wide-screen layout, like Apple's iPad Remote. On screens wider than 3:5 the full-screen remote keeps phone proportions in a centred column. The column is `column_ratio` × the screen height wide (default 0.52, at least 320 px), and `max_width` can cap it. The touchpad grows to fill the height, the top row and the volume tabs sit at the column's edges, and play/pause, Back and Home cluster under the pad. Phones are unchanged.
+
+### Docs
+- README: screen recordings from a real iPhone (Kodi in use, and opening the remote from Control Center, with personal items blurred) next to the demo GIF.
+
+## [0.1.8] - 2026-10-11
 
 ### Changed
 - Every overlay now uses the same Liquid Glass panel as the typing sheet and keyboard banner: the device picker, the sources list, the sound mode menu and the More menu.
@@ -14,7 +24,7 @@ All notable changes to this project are documented here. The format follows
 - The keyboard button no longer opens the typing sheet when nothing on the TV is asking for text. Previously every keystroke made Home Assistant show "No text input field is currently focused on the Apple TV", and those toasts piled up. When the player can report keyboard focus (an Apple TV `keyboard_sensor`, or Kodi's keyboard window seen by the poll), the sheet only opens while a text field is focused; otherwise a small glass hint says "No text field selected on <player>" for about 2 seconds. The sheet closes if focus drops while it's open. Players that can't report focus (LG webOS, or Kodi while video plays) behave as before.
 - Text service calls now turn off Home Assistant's own error toast. A failure shows a single glass hint instead.
 
-## [0.1.7] - unreleased
+## [0.1.7] - 2026-10-11
 
 ### Changed
 - The typing sheet (keyboard button) now matches the rest of the card: the same frosted Liquid Glass panel and app-icon header as the keyboard banner, a thin close icon in a glass circle, and glass pill Clear and Send buttons instead of coloured text links. The placeholder is shorter ("Type or dictate") and the extra hint line is gone.
@@ -22,17 +32,17 @@ All notable changes to this project are documented here. The format follows
 - README: a demo GIF at the top, and step-by-step instructions for opening the remote from iPhone Control Center with a Home Assistant **Open Page** shortcut (and why URL shortcuts and the phone's volume buttons don't work).
 - Screenshots and the social preview re-rendered from 0.1.7 (no mic button, new typing sheet).
 
-## [0.1.6] - unreleased
+## [0.1.6] - 2026-10-11
 
 ### Changed
 - The mic button on the touchpad is removed by default. It opened the same text box as the keyboard button. The keyboard button and the automatic keyboard banner are unchanged. Set `show_mic: true` to bring the mic button back.
 
-## [0.1.5] - unreleased
+## [0.1.5] - 2026-10-11
 
 ### Fixed
 - The collapsed CH control (CH with its caps) sat a few pixels below the list, -10, ⋯ and +10 icons. The row's buttons are now fixed 44 px boxes with their icons centred, the same as the CH slot, so everything shares one centre line, as on Apple's remote. The row sits about 38 px above the pad's bottom edge, as on Apple's.
 
-## [0.1.4] - unreleased
+## [0.1.4] - 2026-10-11
 
 ### Changed
 - The pad's bottom row (sources | -10 | ⋯ | +10 | CH) is always shown again, as on Apple's iOS Remote. 0.1.3's hide/show toggle and its `bottom_row` option are gone.
@@ -44,7 +54,7 @@ All notable changes to this project are documented here. The format follows
 ### Added
 - `channel_timeout`: how long, in ms, before an open CH stack folds back (default `5000`; `0` = never).
 
-## [0.1.3] - unreleased (superseded by 0.1.4)
+## [0.1.3] - 2026-10-11 (superseded by 0.1.4)
 
 ### Changed
 - The pad's bottom row (sources | -10 | ⋯ | +10 | CH) now works like Apple's iOS Remote: it is hidden by default, so the touchpad is clear. Tap **CH** in the bottom-right corner of the pad to show it, and tap CH again to hide it. Players without channel keys (e.g. Kodi) get a small chevron in the same spot instead.
@@ -54,7 +64,7 @@ All notable changes to this project are documented here. The format follows
 ### Added
 - `bottom_row: always` keeps the 0.1.2 always-visible row (default `toggle`).
 
-## [0.1.2] - unreleased
+## [0.1.2] - 2026-10-11
 
 ### Added
 - Kodi keyboard detection: while Kodi is active and the card is visible, the card polls `GUI.GetProperties(currentwindow)` and listens for `kodi_call_method_result`. The keyboard banner shows for the virtual keyboard (10103) and the numeric input (10109). New options: `keyboard_poll` (ms, default 2000, 0 = off) and `keyboard_poll_during_video` (default false). Polling stops when the card is hidden or removed, another player is active or a video plays.
@@ -64,7 +74,7 @@ All notable changes to this project are documented here. The format follows
 ### Changed
 - Kodi text is sent live (`Input.SendText` with `done: false`), then with `done: true` on Enter. Enter cancels any pending live update.
 
-## [0.1.1] - unreleased
+## [0.1.1] - 2026-10-11
 
 ### Added
 - Per-player `input:` option to switch an AVR, soundbar or TV input before a key is sent. Options:
@@ -88,7 +98,7 @@ All notable changes to this project are documented here. The format follows
 - Info and subtitles moved from separate icons into the More menu.
 - Key sequences now run in order and wait for an input switch to finish.
 
-## [0.1.0] - unreleased
+## [0.1.0] - 2026-10-11
 
 ### Added
 - First version of Glass Remote Card: a single-file, dependency-free Lovelace card.
