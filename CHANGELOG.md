@@ -9,6 +9,8 @@ All notable changes to this project are documented here. The format follows
 ### Changed
 - The typing sheet (keyboard button) now matches the rest of the card: the same frosted Liquid Glass panel and app-icon header as the keyboard banner, a thin close icon in a glass circle, and glass pill Clear and Send buttons instead of coloured text links. The placeholder is shorter ("Type or dictate") and the extra hint line is gone.
 - README: says plainly that no other custom cards or add-ons are needed, only Home Assistant's built-in integrations.
+- README: a demo GIF at the top, and step-by-step instructions for opening the remote from iPhone Control Center with a Home Assistant **Open Page** shortcut (and why URL shortcuts and the phone's volume buttons don't work).
+- Screenshots and the social preview re-rendered from 0.1.7 (no mic button, new typing sheet).
 
 ## [0.1.6] - unreleased
 

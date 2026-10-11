@@ -12,6 +12,10 @@ One card drives your Apple TVs, Kodi, LG webOS TVs and any other `media_player`:
 **Nothing else to install.** It's a single JavaScript file. You don't need any other custom cards, HACS add-ons or Home Assistant add-ons: no card-mod, browser_mod, kiosk-mode, template helpers or extra scripts. It only uses Home Assistant's built-in integrations for your devices: [Apple TV](https://www.home-assistant.io/integrations/apple_tv/), [Kodi](https://www.home-assistant.io/integrations/kodi/) and [LG webOS TV](https://www.home-assistant.io/integrations/webostv/). Any other `media_player` works through its standard services.
 
 <p align="center">
+  <img src="https://raw.githubusercontent.com/evski/ha-glass-remote-card/main/docs/images/demo.gif" width="300" alt="Demo: the artwork pill, picking a player, touchpad swipes and taps, the CH control opening and closing, the keyboard banner and typing, and the volume tabs">
+</p>
+
+<p align="center">
   <img src="https://raw.githubusercontent.com/evski/ha-glass-remote-card/main/docs/images/remote-kodi.png" width="240" alt="Remote controlling Kodi, with artwork in the top pill">
   <img src="https://raw.githubusercontent.com/evski/ha-glass-remote-card/main/docs/images/picker.png" width="240" alt="Device picker">
   <img src="https://raw.githubusercontent.com/evski/ha-glass-remote-card/main/docs/images/remote-apple-tv-wants-text.png" width="240" alt="Apple TV asking for text">
@@ -367,10 +371,28 @@ Notes:
           data: { input: $source }
 ```
 
-## Open it from iPhone Control Center
+## Open it from Control Center (iPhone)
 
-- **iOS 18+:** in Control Center, tap **+** → **Add a Control** → **Home Assistant** → **Open Page**, and pick your remote dashboard.
-- **Older iOS:** use a Shortcut with **Open URL** `homeassistant://navigate/<dashboard>/<view>`, then add the Shortcut to Control Center.
+You can put the remote one swipe away in Control Center, like Apple's own Remote. You need iOS 18 or later and the Home Assistant companion app, logged in to your server.
+
+1. Open the **Shortcuts** app and tap **+** to make a new shortcut.
+2. Tap **Add Action**, search for **Home Assistant** and choose **Open Page**.
+3. In the action, tap the page field and pick your remote dashboard (and view, if it has more than one). This is the dashboard with `glass-remote-card` on it, for example `/dashboard-remote/0`.
+4. Rename the shortcut, for example **Remote**: tap the name at the top → **Rename**.
+5. Set its icon: tap the name → **Choose Icon** → **Symbol**, then search for **tv**. Apple doesn't offer its Remote symbol to shortcuts, so the TV symbol is the closest match.
+6. Tap **Done**.
+7. Open Control Center, touch and hold an empty space (or tap **+** at the top left) and tap **Add a Control**.
+8. Search for **Shortcuts**, tap **Shortcut**, then choose **Remote**. Drag the control where you want it and tap an empty space to finish.
+
+Tapping the control now opens the Home Assistant app straight on the remote.
+
+<!-- Screen recording slot: docs/images/control-center.gif (to be added by the maintainer; not generated). When it exists, uncomment:
+<p align="center"><img src="https://raw.githubusercontent.com/evski/ha-glass-remote-card/main/docs/images/control-center.gif" width="300" alt="Adding the Remote shortcut to Control Center and opening the remote"></p>
+-->
+
+**Why not a URL shortcut?** A Shortcut with **Open URL** `homeassistant://navigate/...` looks simpler, but it isn't reliable: if the app is closed or was suspended, iOS often launches it on its default page and the navigate part is lost, or a Safari hop is shown first. **Open Page** is the companion app's own action, so it always lands on the right dashboard.
+
+**The phone's volume buttons can't drive the remote.** iOS keeps the physical volume buttons for the phone's own volume. Apple's Remote is part of the system, so it's allowed to take them over, but a web page or the dashboard inside the Home Assistant app never gets those button presses. Use the volume tabs on the pad's edge instead.
 
 ## With Sidebar Mini Player
 
@@ -397,6 +419,7 @@ kiosk_mode:
 ## Limits
 
 - **Siri can't be triggered** from Home Assistant on an Apple TV. Use the keyboard button and your phone keyboard's dictation instead.
+- **The phone's physical volume buttons can't be used.** iOS keeps them for the phone's own volume, and a web page never sees them (see [Control Center](#open-it-from-control-center-iphone)).
 - **A web page can't open the phone keyboard without a tap.** That's why the keyboard notification needs one tap.
 - **Apple TV info and subtitles both open tvOS's info panel.** There are no separate keys for them.
 - **LG rewind/fast-forward** change playback speed; they don't jump 10 seconds.
