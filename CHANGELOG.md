@@ -4,11 +4,20 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [0.1.12] - 2026-10-11
+## [0.1.13] - 2026-10-11
 
 First public release. Glass Remote Card is a frosted-glass touchpad remote for Home Assistant that follows whatever you're watching: Kodi, LG webOS, devices from the Apple TV integration, or any `media_player`. It has a touchpad, volume tabs, keyboard and dictation, a keyboard banner, sources, sound mode, a More menu, a CH control and input switching. It's a single file with no dependencies. Everything below was built and tested privately on the same day.
 
 Not affiliated with or endorsed by Apple Inc. Apple TV is a trademark of Apple Inc.
+
+### Changed
+- The device picker looks like 0.1.11 again: plain rows on the dark blurred shade, with the same colours, row spacing, icons, hairline dividers, tick and fonts. The 0.1.12 glass panel (rounded card and shadow) is gone.
+- The dark shade now ends just below the last row (Exit remote), fading out over its last 28 px, instead of covering the whole page. It is sized to the list when the picker opens and is capped at the bottom of the screen.
+
+### Kept from 0.1.12
+- No close button. Tap the pill again, tap outside, or press Escape to close the picker. The slide-down animation is unchanged.
+
+## [0.1.12] - 2026-10-11
 
 ### Changed
 - The device picker under the top pill is now a compact floating frosted-glass panel with rounded corners and a soft shadow. It is only as tall as its rows (Auto, your devices, Exit remote) and slides down from the pill. Before, the open dropdown darkened the whole page below the pill like a full-height sheet. The panel keeps the same width, the hairline dividers and the tick on the selected row, and it scrolls only if the rows would run past the bottom of the screen.

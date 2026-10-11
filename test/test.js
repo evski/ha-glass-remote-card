@@ -192,7 +192,7 @@ function ptr(w, el, type, x = 100, y = 100) {
     m.$(".kb-sub").textContent === "Keyboard Input" && m.$(".kb .kb-x").classList.contains("glass") && !m.$(".kb .hint") &&
     [...m.card.shadowRoot.querySelectorAll(".kb .row button")].every((b) => b.classList.contains("glass")) &&
     m.$(".kb textarea").placeholder === "Type or dictate", m.$(".kb-title").textContent);
-  check("D17c picker has no close button (removed in 0.1.12, Grok Bot 11 Oct 2026); the typing sheet keeps its own", !m.$(".picker .dd-x") && !!m.$(".kb .kb-x.glass"));
+  check("D17c picker has no close button (removed in 0.1.12 and still gone in 0.1.13, Grok Bot 11 Oct 2026); the typing sheet keeps its own", !m.$(".picker .dd-x") && !!m.$(".kb .kb-x.glass"));
   const ta = m.$(".kb textarea"); ta.value = "space"; ta.dispatchEvent(new w.Event("input")); await sleep(400);
   check("D18 Kodi: live Input.SendText done=false while typing", eq(m.hass.calls, [["kodi", "call_method", { entity_id: "media_player.kodi", method: "Input.SendText", text: "space", done: false }]]), m.hass.calls);
   ta.value = "space x"; ta.dispatchEvent(new w.Event("input"));
@@ -565,25 +565,31 @@ function ptr(w, el, type, x = 100, y = 100) {
     k.card.remove(); w.localStorage.clear();
   }
 
-  // ---- DD: compact floating picker panel, no full-page sheet, no close button (0.1.12, Grok Bot 11 Oct 2026) ----
+  // ---- DD: 0.1.11 look, shade only as tall as the list, no close button (0.1.13, Grok Bot 11 Oct 2026) ----
   {
     w.localStorage.clear();
     const k = mount(w, CONFIG(), states({ "media_player.kodi": { attributes: { source_list: ["Movies", "TV"], source: "TV" } } }));
     const css = k.$("style").textContent;
     const rule = (sel) => { const m = css.match(new RegExp("\\n\\s*" + sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + " \\{([^}]*)\\}")); return m ? m[1] : ""; };
-    const dd = rule(".dd"), bg = rule(".dd-bg");
-    check("DD1 the list is the frosted glass panel: blur, rounded corners, soft shadow", /backdrop-filter: blur\(30px\)/.test(dd) && /border-radius: 22px/.test(dd) && /box-shadow:[^;]*0 12px 32px/.test(dd), dd);
-    check("DD2 panel is only as tall as its rows: height auto, no inset/bottom/min-height, scroll cap at the screen bottom only",
-      /height: auto/.test(dd) && !/inset:|bottom:|min-height/.test(dd) && /max-height: calc\(100dvh - var\(--dd-top, 80px\) - 16px\); overflow-y: auto/.test(dd), dd);
-    check("DD3 no full-page shade: no .dd-shade element or rule; catcher is transparent", !k.$(".dd-shade") && !/\.dd-shade/.test(css) && /background: transparent/.test(bg) && !/backdrop-filter/.test(bg), bg);
+    const dd = rule(".dd"), shade = rule(".dd-shade"), bg = rule(".dd-bg");
+    check("DD1 0.1.11 look: the list has no glass panel, rounded card or shadow; rows padded as in 0.1.11",
+      !/background|backdrop-filter|border-radius|box-shadow/.test(dd) && /padding: 2px 0 6px/.test(dd) &&
+      /\.opt \{ width: 100%; display: flex; align-items: center; gap: 12px; padding: 0 44px 0 6px; min-height: 48px; text-align: left; font-size: 15px;/.test(css), dd);
+    check("DD2 0.1.11 dark blurred shade kept (same colour and blur, full width from under the top row)",
+      !!k.$(".picker .dd-shade") && /background: rgba\(0,0,0,\.86\)/.test(shade) && /backdrop-filter: blur\(14px\)/.test(shade) && /left: 0; right: 0; top: var\(--dd-top, 80px\)/.test(shade) &&
+      !/background/.test(bg), shade);
+    check("DD3 shade ends at the list: sized by --dd-shade-h, no bottom: 0, capped at the screen, soft fade at the bottom",
+      /height: var\(--dd-shade-h, 340px\)/.test(shade) && !/bottom: 0|inset/.test(shade) && /max-height: calc\(100dvh - var\(--dd-top, 80px\)\)/.test(shade) &&
+      /mask-image: linear-gradient\(to bottom, #000 calc\(100% - 28px\), transparent\)/.test(shade), shade);
     check("DD4 still grows down from the pill (top-anchored, slide-down transform)", /top: var\(--dd-top/.test(dd) && /transform-origin: 50% 0; transform: translateY\(-14px\) scaleY\(\.7\)/.test(dd));
     check("DD5 no close button anywhere in the picker markup or CSS", !/\.dd-x/.test(css) && !k.$(".picker button:not(.opt)"));
     k.$(".pill").click();
     const rows = [...k.card.shadowRoot.querySelectorAll(".picker .dd > .opts > .opt")];
-    check("DD6 open panel holds only the rows (Auto, devices, Exit), hairlines between rows, tick on the selected row",
-      rows.length === 6 && k.$(".picker .dd").children.length === 1 && /\.opt \{[^}]*border-top: \.5px solid/.test(css) && /\.opt:first-child \{ border-top: none; \}/.test(css) &&
+    check("DD6 open list holds only the rows (Auto, devices, Exit), hairlines between rows, tick on the selected row",
+      rows.length === 6 && k.$(".picker .dd").children.length === 1 && /\.opt \{[^}]*border-top: \.5px solid rgba\(255,255,255,\.14\)/.test(css) && /\.opt:first-child \{ border-top: none; \}/.test(css) &&
       rows.filter((r) => r.querySelector(".tick").textContent === "\u2713").length === 1);
-    check("DD7 rows inset inside the panel (no space kept for a close button)", /\.opt \{ width: 100%; display: flex; align-items: center; gap: 12px; padding: 0 16px 0 14px;/.test(css));
+    check("DD7 opening sizes the shade to the rows plus the 28px fade (6 rows x 48 + 8 + 28 when not laid out)",
+      k.$(".picker").style.getPropertyValue("--dd-shade-h") === "324px", k.$(".picker").style.getPropertyValue("--dd-shade-h"));
     // sources / sound mode / More: already compact floating menus, transparent catcher, no close button
     const mrule = rule(".menu"), mbg = rule(".menu-bg");
     check("DD8 other button menus are compact floating panels without a close button", !/background|backdrop-filter/.test(mbg) && /max-height: 56vh/.test(mrule) && /border-radius: 22px/.test(mrule) &&

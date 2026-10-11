@@ -47,11 +47,16 @@
  * The panel scrolls only when the rows would run past the bottom of the screen. The close button is removed:
  * tapping the pill, tapping outside or pressing Escape closes it. The sources, sound mode and More menus were
  * already compact floating panels without a close button, so they are unchanged.
+ * 0.1.13 (Grok Bot, 11 Oct 2026): the picker's look is back to 0.1.11 (plain rows on the dark blurred shade,
+ * same colours, row padding, icons, hairlines, tick and fonts; no glass card, rounded panel or shadow). Why:
+ * Evan wanted the earlier styling kept. Only two 0.1.12 behaviour changes stay: the dark shade now ends just
+ * below the last row (Exit remote) with a short fade instead of covering the whole page, and there is still no
+ * close button (pill, outside tap or Escape close it). The slide-down animation is unchanged.
  */
 (() => {
   "use strict";
 
-  const VERSION = "0.1.12";
+  const VERSION = "0.1.13";
   const TAG = "glass-remote-card";
   const PICK_KEY = "glass-remote-card:pick:";
 
@@ -728,20 +733,25 @@
     /* picker header, 0.1.8: same layout as the typing sheet's header (title + thin close in a glass circle) */
     .sheet h3 { margin: 0; padding: 2px 0 10px 6px; font-size: 15px; font-weight: 600; color: #fff; display: flex; justify-content: space-between; align-items: center; }
     /* device picker, 0.1.10 (Grok Bot, 11 Oct 2026): dropdown anchored under the pill, grows downward.
-       Rows are plain with hairline dividers and a left tick.
-       0.1.12 (Grok Bot, 11 Oct 2026): compact floating panel. What: the list itself is the frosted glass panel
-       (rounded corners, soft shadow), only as tall as its rows, scrolling only if it would run off the screen;
-       no full-page shade (the .dd-bg catcher is transparent, tap outside still closes) and no close button.
-       Why: the open dropdown covered the whole page; it should stop at its last row. */
-    .dd-bg { position: fixed; inset: 0; z-index: 20; background: transparent; visibility: hidden; pointer-events: none; transition: visibility 0s linear .28s; }
+       Transparent full-screen catcher (tap anywhere outside the list, pill included, closes it); the shade starts
+       below the top row so the pill stays visible; rows are plain with hairline dividers and a left tick.
+       0.1.13 (Grok Bot, 11 Oct 2026): 0.1.11 look restored (0.1.12's glass panel dropped at Evan's request).
+       What changed vs 0.1.11: the shade is only as tall as the list (--dd-shade-h, measured on open) and fades out
+       over its last 28px instead of running to the bottom of the page; the close button is gone.
+       Why: the open dropdown covered the whole page; it should stop at its last row without looking cut off. */
+    .dd-bg { position: fixed; inset: 0; z-index: 20; visibility: hidden; pointer-events: none; transition: visibility 0s linear .28s; }
     .dd-bg.show { visibility: visible; pointer-events: auto; transition: none; }
-    .dd { position: fixed; top: var(--dd-top, 80px); left: var(--dd-left, 16px); width: var(--dd-width, calc(100vw - 32px)); height: auto;
-      max-height: calc(100dvh - var(--dd-top, 80px) - 16px); overflow-y: auto; overscroll-behavior: contain; padding: 4px 0;
-      border-radius: 22px; ${PANEL} box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 12px 32px rgba(0,0,0,.45), 0 2px 6px rgba(0,0,0,.3);
+    .dd-shade { position: fixed; left: 0; right: 0; top: var(--dd-top, 80px); height: var(--dd-shade-h, 340px);
+      max-height: calc(100dvh - var(--dd-top, 80px)); background: rgba(0,0,0,.86);
+      -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+      -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); opacity: 0; transition: opacity .22s ease; pointer-events: none; }
+    .dd-bg.show .dd-shade { opacity: 1; }
+    .dd { position: fixed; top: var(--dd-top, 80px); left: var(--dd-left, 16px); width: var(--dd-width, calc(100vw - 32px));
+      max-height: calc(100dvh - var(--dd-top, 80px) - 16px); overflow-y: auto; overscroll-behavior: contain; padding: 2px 0 6px;
       transform-origin: 50% 0; transform: translateY(-14px) scaleY(.7); opacity: 0;
       transition: transform .28s cubic-bezier(.2,.9,.3,1.08), opacity .18s ease; }
     .dd-bg.show .dd { transform: none; opacity: 1; }
-    .opt { width: 100%; display: flex; align-items: center; gap: 12px; padding: 0 16px 0 14px; /* 0.1.12: inset inside the panel, no room kept for a close button */ min-height: 48px; text-align: left; font-size: 15px;
+    .opt { width: 100%; display: flex; align-items: center; gap: 12px; padding: 0 44px 0 6px; min-height: 48px; text-align: left; font-size: 15px;
       border-top: .5px solid rgba(255,255,255,.14); transition: background .15s; }
     .opt:first-child { border-top: none; }
     .opt:active { background: rgba(255,255,255,.07); }
@@ -1004,8 +1014,8 @@
             <button class="side glass" data-key="home" aria-label="Home">${icon("home")}</button>
           </div>
           <!-- 0.1.11 (Grok Bot, 11 Oct 2026): picker inside the card's layer so the raised top row can sit above its backdrop -->
-          <!-- 0.1.12 (Grok Bot, 11 Oct 2026): no full-page shade and no close button; the list is a compact glass panel -->
-          <div class="dd-bg picker"><div class="dd" id="grc-picker" role="listbox" aria-label="Choose device"><div class="opts"></div></div></div>
+          <!-- 0.1.13 (Grok Bot, 11 Oct 2026): 0.1.11 shade + plain rows; the shade stops at the last row; no close button -->
+          <div class="dd-bg picker"><div class="dd-shade"></div><div class="dd" id="grc-picker" role="listbox" aria-label="Choose device"><div class="opts"></div></div></div>
         </div>
         <div class="menu-bg"><div class="menu" role="menu"></div></div>
         <div class="toast" role="status" aria-live="polite"></div>
@@ -1209,6 +1219,7 @@
         r.querySelector(".picker").classList.add("show"); r.querySelector(".pill").classList.add("open");
         r.querySelector(".top").classList.add("dd-open"); // 0.1.11: pill stays above the backdrop
         r.querySelector(".pill").setAttribute("aria-expanded", "true");
+        this._sizeShade(); // 0.1.13: shade only as tall as the list
       }
       else if (act === "close") this._closeSheets();
       else if (act === "ch") { this._haptic(); this._setChOpen(!this._chOpen); }
@@ -1281,6 +1292,14 @@
       bg.style.setProperty("--dd-top", Math.round(b.bottom + 8) + "px");
       bg.style.setProperty("--dd-left", Math.round(b.left) + "px");
       bg.style.setProperty("--dd-width", Math.round(b.width) + "px");
+    }
+    /** 0.1.13 (Grok Bot, 11 Oct 2026): size the dark shade to the list (plus a 28px fade) so it ends at the last
+     *  row instead of covering the page. Measured after opening; 48px per row if not laid out (tests). */
+    _sizeShade() {
+      const r = this.shadowRoot, bg = r.querySelector(".picker"), dd = r.querySelector(".dd");
+      if (!bg || !dd) return;
+      const h = dd.offsetHeight || (r.querySelectorAll(".picker .opt").length * 48 + 8);
+      bg.style.setProperty("--dd-shade-h", Math.round(h + 28) + "px");
     }
     _friendly(p) { const st = this._states[p.entity]; return p.name || (st && st.attributes && st.attributes.friendly_name) || p.entity; }
 
