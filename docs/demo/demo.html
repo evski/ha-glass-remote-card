@@ -3,7 +3,18 @@
      Used to render the README screenshots (scripts/screenshots.py). Service calls only log. -->
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <style>html,body{margin:0;background:#000;height:100%} .wrap{padding:24px;max-width:420px}</style></head>
-<body><script src="../../glass-remote-card.js"></script><script>
+<body><script>
+// Grok Bot, 11 Oct 2026: a tiny stand-in for Home Assistant's <ha-icon>, so the demo's shortcuts show the same
+// mdi: icons as a real dashboard (the card only uses ha-icon when HA has defined it). Only the three icons the
+// demo uses are included. Path data from @mdi/js 7.4.47 (Material Design Icons, Apache-2.0).
+const MDI = {"mdi:movie-search": "M11.03 20H4C2.9 20 2 19.1 2 18L2 6C2 4.9 2.9 4 4 4H5L7 8H10L8 4H10L12 8H15L13 4H15L17 8H20L18 4H22V13.05C20.85 11.22 18.82 10 16.5 10C12.92 10 10 12.92 10 16.5C10 17.79 10.38 19 11.03 20M23.39 22L22 23.39L18.88 20.32C18.19 20.75 17.37 21 16.5 21C14 21 12 19 12 16.5S14 12 16.5 12 21 14 21 16.5C21 17.38 20.75 18.21 20.31 18.9L23.39 22M19 16.5C19 15.12 17.88 14 16.5 14S14 15.12 14 16.5 15.12 19 16.5 19 19 17.88 19 16.5Z", "mdi:television-classic": "M8.16,3L6.75,4.41L9.34,7H4C2.89,7 2,7.89 2,9V19C2,20.11 2.89,21 4,21H20C21.11,21 22,20.11 22,19V9C22,7.89 21.11,7 20,7H14.66L17.25,4.41L15.84,3L12,6.84L8.16,3M4,9H17V19H4V9M19.5,9A1,1 0 0,1 20.5,10A1,1 0 0,1 19.5,11A1,1 0 0,1 18.5,10A1,1 0 0,1 19.5,9M19.5,12A1,1 0 0,1 20.5,13A1,1 0 0,1 19.5,14A1,1 0 0,1 18.5,13A1,1 0 0,1 19.5,12Z", "mdi:progress-check": "M13,2.03V2.05L13,4.05C17.39,4.59 20.5,8.58 19.96,12.97C19.5,16.61 16.64,19.5 13,19.93V21.93C18.5,21.38 22.5,16.5 21.95,11C21.5,6.25 17.73,2.5 13,2.03M11,2.06C9.05,2.25 7.19,3 5.67,4.26L7.1,5.74C8.22,4.84 9.57,4.26 11,4.06V2.06M4.26,5.67C3,7.19 2.25,9.04 2.05,11H4.05C4.24,9.58 4.8,8.23 5.69,7.1L4.26,5.67M15.5,8.5L10.62,13.38L8.5,11.26L7.44,12.32L10.62,15.5L16.56,9.56L15.5,8.5M2.06,13C2.26,14.96 3.03,16.81 4.27,18.33L5.69,16.9C4.81,15.77 4.24,14.42 4.06,13H2.06M7.1,18.37L5.67,19.74C7.18,21 9.04,21.79 11,22V20C9.58,19.82 8.23,19.25 7.1,18.37Z"};
+customElements.define("ha-icon", class extends HTMLElement {
+  static get observedAttributes() { return ["icon"]; }
+  connectedCallback() { this._draw(); }
+  attributeChangedCallback() { this._draw(); }
+  _draw() { const d = MDI[this.getAttribute("icon")]; this.innerHTML = d ? `<svg viewBox="0 0 24 24" width="100%" height="100%" style="display:block"><path fill="currentColor" d="${d}"/></svg>` : ""; }
+});
+</script><script src="../../glass-remote-card.js"></script><script>
 const q = new URLSearchParams(location.search);
 const t = (m) => new Date(Date.now() - m * 60000).toISOString();
 const states = {
@@ -24,11 +35,12 @@ card.setConfig({
     { entity: "media_player.kodi", platform: "kodi", volume_entity: "media_player.receiver",
       sources: { entity: "media_player.receiver", include: [{ UHD: "Kodi" }, { PVR: "Set-top box" }, { GAME: "Games" }, { BT: "Bluetooth" }] },
       sound_mode: { modes: [{ STEREO: "Stereo" }, { DOLBY_SURROUND: "Dolby Surround" }, { DTS_NEURAL_X: "DTS Neural:X" }, { MCH_STEREO: "Multichannel Stereo" }] },
-      // 0.2.0 (Grok Bot, 11 Oct 2026): example shortcuts for the More menu screenshots (built-in icon names; mdi: icons need HA)
+      // 0.2.0 (Grok Bot, 11 Oct 2026): example shortcuts for the More menu screenshots. 0.2.2 renders: mdi: icons
+      // like a real dashboard (drawn by the ha-icon stand-in above)
       shortcuts: [
-        { name: "Search Movies", prompt: "Search movies", service: "kodi.call_method", data: { entity_id: "media_player.kodi", method: "GUI.ActivateWindow", window: "videos", parameters: ["plugin://plugin.video.example/?action=movieSearch&name={text_url}", "return"] } },
-        { name: "Search TV", prompt: "Search TV shows", service: "kodi.call_method", data: { entity_id: "media_player.kodi", method: "GUI.ActivateWindow", window: "videos", parameters: ["plugin://plugin.video.example/?action=tvSearch&name={text_url}", "return"] } },
-        { name: "Trakt Progress", icon: "list", service: "kodi.call_method", data: { entity_id: "media_player.kodi", method: "GUI.ActivateWindow", window: "videos", parameters: ["plugin://plugin.video.example/?action=progress", "return"] } },
+        { name: "Search Movies", icon: "mdi:movie-search", prompt: "Search movies", service: "kodi.call_method", data: { entity_id: "media_player.kodi", method: "GUI.ActivateWindow", window: "videos", parameters: ["plugin://plugin.video.example/?action=movieSearch&name={text_url}", "return"] } },
+        { name: "Search TV", icon: "mdi:television-classic", prompt: "Search TV shows", service: "kodi.call_method", data: { entity_id: "media_player.kodi", method: "GUI.ActivateWindow", window: "videos", parameters: ["plugin://plugin.video.example/?action=tvSearch&name={text_url}", "return"] } },
+        { name: "Trakt Progress", icon: "mdi:progress-check", service: "kodi.call_method", data: { entity_id: "media_player.kodi", method: "GUI.ActivateWindow", window: "videos", parameters: ["plugin://plugin.video.example/?action=progress", "return"] } },
       ] },
     { entity: "media_player.living_room_tv", platform: "webostv", volume_entity: "media_player.receiver" },
     { entity: "media_player.bedroom_apple_tv", platform: "apple_tv", remote: "remote.bedroom_apple_tv", volume_via_remote: true },
