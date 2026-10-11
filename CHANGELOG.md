@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.2] - 2026-10-11
+
+### Changed
+- **No duplicate Info.** While a player shows the Info (i) button on the bottom row (players without CH, such as Kodi), Info is left out of that player's More (⋯) menu. This applies to the default list and to a custom `more:` list. Players with CH (Apple TV, LG webOS) have no Info button, so they keep Info in More. `info_button: false` puts it back in More.
+
 ## [0.2.1] - 2026-10-11
 
 ### Fixed

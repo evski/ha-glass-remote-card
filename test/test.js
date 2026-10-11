@@ -321,9 +321,10 @@ function ptr(w, el, type, x = 100, y = 100) {
 
   // ---- O: more menu + channels -----------------------------------------------------------
   const ids = (p) => H.moreItems(p, AVRS).map((i) => i.id);
-  check("O1 Kodi default more items", eq(ids(SP({})), ["info", "subtitles", "subtitles_hold", "audio_track", "sound_mode", "osd", "context_menu"]), ids(SP({})));
+  // 0.2.2 (Grok Bot, 11 Oct 2026): Kodi's Info is on the row, so More starts at subtitles
+  check("O1 Kodi default more items (no info: it's the row button)", eq(ids(SP({})), ["subtitles", "subtitles_hold", "audio_track", "sound_mode", "osd", "context_menu"]), ids(SP({})));
   check("O2 sound mode item only when available", !ids(SP({ sound_mode: false })).includes("sound_mode"));
-  check("O3 custom list incl. a service item", eq(H.moreItems(SP({ more: ["info", { name: "Lights", service: "scene.turn_on", target: { entity_id: "scene.movie" } }] }), AVRS).map((i) => [i.name, i.steps]),
+  check("O3 custom list incl. a service item", eq(H.moreItems(SP({ info_button: false, more: ["info", { name: "Lights", service: "scene.turn_on", target: { entity_id: "scene.movie" } }] }), AVRS).map((i) => [i.name, i.steps]),
     [["Info", [["kodi", "call_method", { entity_id: "media_player.kodi", method: "Input.Info" }]]], ["Lights", [["scene", "turn_on", { entity_id: "scene.movie" }]]]]));
   check("O4 more: false", H.moreItems(SP({ more: false }), AVRS).length === 0);
   check("O5 validation of more", bad({ players: [{ entity: "media_player.k", more: [{ name: "x" }] }] }) && bad({ players: [{ entity: "media_player.k", more: "info" }] }));
@@ -355,12 +356,13 @@ function ptr(w, el, type, x = 100, y = 100) {
   // more -> sound mode, more -> info
   m.$(".more").click(); await sleep(10);
   const more = [...m.card.shadowRoot.querySelectorAll(".menu .mi")];
-  check("O16 more menu (Kodi)", eq(more.map((b) => b.textContent), ["Info", "Subtitles", "Next subtitle", "Audio Track", "Sound Mode", "Player Controls", "Context Menu"]), more.map((b) => b.textContent));
-  more[4].click(); await sleep(10);
+  // 0.2.2 (Grok Bot, 11 Oct 2026): no Info in Kodi's More (it's the row button, see IB2/IB4)
+  check("O16 more menu (Kodi, no Info)", eq(more.map((b) => b.textContent), ["Subtitles", "Next subtitle", "Audio Track", "Sound Mode", "Player Controls", "Context Menu"]), more.map((b) => b.textContent));
+  more[3].click(); await sleep(10);
   check("O17 more > Sound Mode opens the sound mode menu", m.$(".menu-bg").classList.contains("show") && m.$(".menu .mt").textContent === "Sound Mode");
   m.$(".menu-bg").click(); m.$(".more").click(); await sleep(10);
   m.card.shadowRoot.querySelectorAll(".menu .mi")[0].click(); await sleep(10);
-  check("O18 more > Info sends Input.Info", eq(m.hass.calls.slice(-1)[0], ["kodi", "call_method", { entity_id: "media_player.kodi", method: "Input.Info" }]));
+  check("O18 more > Subtitles sends showsubtitles", eq(m.hass.calls.slice(-1)[0], ["kodi", "call_method", { entity_id: "media_player.kodi", method: "Input.ExecuteAction", action: "showsubtitles" }]), m.hass.calls.slice(-1));
   ptr(w, m.$(".tab[data-key=\"volume_up\"]"), "pointerdown"); await sleep(700); ptr(w, m.$(".tab[data-key=\"volume_up\"]"), "pointerup");
   check("O19 + tab still repeats while held", m.hass.calls.filter((c) => c[1] === "volume_up").length >= 2);
   m.card.remove();
@@ -782,7 +784,7 @@ function ptr(w, el, type, x = 100, y = 100) {
     let rows = [...f.card.shadowRoot.querySelectorAll(".menu .mi")];
     check("SC9 More menu: shortcuts first (in order), then the player's own items after a section gap",
       eq(rows.slice(0, 4).map((b) => b.querySelector(".nm").textContent), ["Search Films", "Say", "My List", "Two steps"]) &&
-      rows.slice(0, 4).every((b) => b.classList.contains("sc")) && rows[4] && rows[4].classList.contains("grp") && rows[4].querySelector(".nm").textContent === "Info" &&
+      rows.slice(0, 4).every((b) => b.classList.contains("sc")) && rows[4] && rows[4].classList.contains("grp") && rows[4].querySelector(".nm").textContent === "Subtitles" /* 0.2.2: Info is on the row for Kodi */ &&
       rows.filter((b) => b.classList.contains("grp")).length === 1);
     check("SC10 search shortcut shows the search icon; call shortcut has none; mdi without ha-icon -> no broken icon",
       !!rows[1].querySelector(".icon svg") && !rows[2].querySelector(".icon") && !rows[0].querySelector(".icon"));
@@ -854,18 +856,28 @@ function ptr(w, el, type, x = 100, y = 100) {
     const box = f.$(".inner"), kids = [...box.children].filter((el) => !el.classList.contains("gone"));
     check("IB3 Info is the right-hand slot (sources | -10 | more | +10 | info)", kids[kids.length - 1] === ib(), kids.map((k) => k.className));
     f.$(".more").click(); await sleep(10);
-    check("IB4 Kodi More menu still lists Info", [...f.card.shadowRoot.querySelectorAll(".menu .mi .nm")].some((n) => n.textContent === "Info"));
+    // 0.2.2 (Grok Bot, 11 Oct 2026): Info is on the row, so it is no longer in Kodi's More menu (Evan: no duplicate)
+    const kNames = [...f.card.shadowRoot.querySelectorAll(".menu .mi .nm")].map((n) => n.textContent);
+    check("IB4 Kodi More menu has no Info (it's on the row); the rest is still there", !kNames.includes("Info") && kNames.includes("Subtitles") && kNames.includes("Context Menu"), kNames);
     f.card.remove(); w.localStorage.clear();
     // players with CH keep CH in that slot and Info stays in More
     f = mount(w, CONFIG(), states({ "media_player.kodi": { state: "idle" }, "media_player.lr_tv": { attributes: { source: "Apple TV" } } }));
     check("IB5 Apple TV active: CH shown, no row Info", f.card.activeEntity === "media_player.lr_appletv" && !f.$(".ch").classList.contains("gone") && ib().classList.contains("gone"));
+    f.$(".more").click(); await sleep(10);
+    check("IB9 Apple TV (CH, no Info button) keeps Info in More", [...f.card.shadowRoot.querySelectorAll(".menu .mi .nm")].some((n) => n.textContent === "Info"));
     f.card.remove(); w.localStorage.clear();
     const cfgOff = CONFIG(); cfgOff.players[1].info_button = false;
     f = mount(w, cfgOff, states());
     check("IB6 info_button: false hides it on Kodi", f.card.activeEntity === "media_player.kodi" && ib().classList.contains("gone"));
+    f.$(".more").click(); await sleep(10);
+    check("IB10 info_button: false -> Info back in Kodi's More menu", [...f.card.shadowRoot.querySelectorAll(".menu .mi .nm")].some((n) => n.textContent === "Info"));
     f.card.remove(); w.localStorage.clear();
     let threw = false; try { H.normaliseConfig({ players: [{ entity: "media_player.kodi", platform: "kodi", info_button: "yes" }] }); } catch (_) { threw = true; }
     check("IB7 info_button must be true or false", threw);
+    const ids = (p) => H.moreItems(p, {}).map((x) => x.id);
+    check("IB11 moreItems helper: Kodi default + custom list drop info; webOS keeps it; channels: true Kodi keeps it",
+      !ids({ entity: "media_player.k", platform: "kodi" }).includes("info") && eq(ids({ entity: "media_player.k", platform: "kodi", more: ["info", "osd"] }), ["osd"]) &&
+      ids({ entity: "media_player.t", platform: "webostv" }).includes("info") && ids({ entity: "media_player.k", platform: "kodi", channels: true }).includes("info"));
     check("IB8 helper: Kodi yes, webOS (CH) no, generic without remote no",
       H.hasInfoButton({ entity: "media_player.k", platform: "kodi" }, {}) && !H.hasInfoButton({ entity: "media_player.t", platform: "webostv" }, {}) &&
       !H.hasInfoButton({ entity: "media_player.g", platform: "generic" }, {}));

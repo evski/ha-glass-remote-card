@@ -35,9 +35,9 @@ One card drives Kodi, LG webOS TVs, devices from Home Assistant's Apple TV integ
 - **Now-playing pill.** Shows artwork, title and `Device · episode/app/state`. Tap it to open the device picker, which is built in (no browser_mod).
 - **Touchpad.** Swipe for arrows; keep holding after a swipe to keep moving. Tap to select, long-press for the context menu.
 - **Buttons:**
-  - A bottom row inside the pad: **sources list | -10 | ⋯ more | +10 | CH**. Tap **CH** to open the channel stack (up chevron, CH, down chevron). Tap CH again to close it, or it closes by itself after 5 s. CH only shows on devices with channel keys. On devices without them (Kodi by default), that slot is an **Info** (i) button instead.
+  - A bottom row inside the pad: **sources list | -10 | ⋯ more | +10 | CH**. Tap **CH** to open the channel stack (up chevron, CH, down chevron). Tap CH again to close it, or it closes by itself after 5 s. CH only shows on devices with channel keys. On devices without them (Kodi by default), that slot is an **Info** (i) button instead, and Info is then left out of that device's More menu.
   - **Sources** opens a glass picker with the player's sources, or those of your receiver or TV. The current source is ticked.
-  - **More (⋯)** holds info, subtitles, sound mode and each platform's extras.
+  - **More (⋯)** holds info (unless the device has the Info button on the row), subtitles, sound mode and each platform's extras.
   - **Shortcuts** you define per player (an add-on search, a favourite list, a scene) appear as the first section of the More menu while that player is active. Search shortcuts ask for text in the typing sheet first. See [Shortcuts](#shortcuts).
   - Play/pause, a big Back button and Home underneath. Long-press Back for the top menu and Home for the platform's extra action.
 - **Volume tabs on the pad's edge.** Holding a tab repeats. Press and hold the speaker badge between the tabs to pick the receiver's **sound mode**. Volume can go to a receiver, with a fallback when the receiver is off, or through the player's `remote` entity (HDMI-CEC/IR).
@@ -166,7 +166,7 @@ source_map:                               # optional: follow the TV's input
 | `more` | Items in the ⋯ menu, or `false` to hide it. |
 | `shortcuts` | Your own service calls, shown as the first section of the ⋯ menu while this player is active. A search shortcut asks for text first. See [Shortcuts](#shortcuts). |
 | `channels` | Show the CH up/down control. |
-| `info_button` | `true` by default: an Info (i) button in the bottom row's right-hand slot when the player has no CH control. `false` hides it (Info stays in More). |
+| `info_button` | `true` by default: an Info (i) button in the bottom row's right-hand slot when the player has no CH control. While it shows, `info` is left out of that player's More menu. `false` hides it and puts Info back in More. |
 | `keyboard_poll` | Kodi: how often (ms) to check whether Kodi's on-screen keyboard is open. Default `2000`; `0` turns it off. Also settable on the card. See [Kodi keyboard detection](#kodi-keyboard-detection). |
 | `keyboard_poll_during_video` | Kodi: keep checking while a video plays. Default `false`. |
 | `actions` | Override any button: `up`, `down`, `left`, `right`, `select`, `select_hold`, `back`, `back_hold`, `home`, `home_hold`, `play_pause`, `skip_back`, `skip_fwd`, `info`, `subtitles`, `channel_up`, `channel_down`, `power`, `volume_up`, `volume_down`, `mute`, `text`. Each takes `{service, data, target}` or a list of them. In `text`, the value `$text` is replaced with what you typed. |
@@ -236,7 +236,7 @@ Press and hold the small speaker badge between the volume tabs. A glass menu ope
 
 ### More (⋯)
 
-The defaults depend on the platform. Items that don't do anything on the player are left out.
+The defaults depend on the platform. Items that don't do anything on the player are left out. `info` is also left out while the player shows the Info (i) button on the bottom row (no CH control, e.g. Kodi), so it isn't there twice.
 
 | `platform` | Default `more` |
 |---|---|

@@ -65,11 +65,14 @@
  * in their More menu (and in Kodi's too). `info_button: false` on a player hides it. Why: Evan: "We've lost the
  * info button?". The Remote dashboard had -10 | info | subtitles | +10 in the pad before it moved to this card;
  * 0.1.1's bottom row put Info inside More, so on Kodi it took two taps and the right-hand slot sat empty.
+ * 0.2.2 (Grok Bot, 11 Oct 2026): no duplicate Info. What: while a player shows the bottom-row Info button,
+ * "info" is left out of that player's More menu (default or custom `more:` list). Players with CH (no Info
+ * button) keep Info in More. Why: Evan: "Good we don't need info in the menu now then".
  */
 (() => {
   "use strict";
 
-  const VERSION = "0.2.1";
+  const VERSION = "0.2.2";
   const TAG = "glass-remote-card";
   const PICK_KEY = "glass-remote-card:pick:";
 
@@ -454,8 +457,11 @@
     if (p.more === false) return [];
     const list = Array.isArray(p.more) ? p.more : PLATFORMS[p.platform].more || [];
     const out = [];
+    // 0.2.2 (Grok Bot, 11 Oct 2026): the row's Info button replaces More > Info for this player (no duplicate)
+    const infoOnRow = hasInfoButton(p, states || {});
     list.forEach((m, i) => {
       if (typeof m === "string") {
+        if (m === "info" && infoOnRow) return; // 0.2.2
         const [name, ic] = MORE_LABELS[m] || [m.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()), null];
         if (m === "sound_mode" || m === "sources") {
           if ((m === "sound_mode" ? soundModeMenu : sourceMenu)(p, states)) out.push({ id: m, name, icon: ic, open: m });
