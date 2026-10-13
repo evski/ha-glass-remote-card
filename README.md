@@ -169,13 +169,17 @@ source_map:                               # optional: follow the TV's input
 | `info_button` | `true` by default: an Info (i) button in the bottom row's right-hand slot when the player has no CH control. While it shows, `info` is left out of that player's More menu. `false` hides it and puts Info back in More. |
 | `keyboard_poll` | Kodi: how often (ms) to check whether Kodi's on-screen keyboard is open. Default `2000`; `0` turns it off. Also settable on the card. See [Kodi keyboard detection](#kodi-keyboard-detection). |
 | `keyboard_poll_during_video` | Kodi: keep checking while a video plays. Default `false`. |
-| `actions` | Override any button: `up`, `down`, `left`, `right`, `select`, `select_hold`, `back`, `back_hold`, `home`, `home_hold`, `play_pause`, `skip_back`, `skip_fwd`, `info`, `subtitles`, `channel_up`, `channel_down`, `power`, `volume_up`, `volume_down`, `mute`, `text`. Each takes `{service, data, target}` or a list of them. In `text`, the value `$text` is replaced with what you typed. |
+| `actions` | Override any button: `up`, `down`, `left`, `right`, `select`, `select_hold`, `back`, `back_hold`, `home`, `home_hold`, `play_pause`, `skip_back`, `skip_fwd`, `info`, `subtitles`, `channel_up`, `channel_down`, `power`, `power_on` (used when the player is off), `power_off` (used when it's on), `volume_up`, `volume_down`, `mute`, `text`. Each takes `{service, data, target}` or a list of them. In `text`, the value `$text` is replaced with what you typed. |
 
 ```yaml
     actions:
       power:
         service: script.turn_on
         target: { entity_id: script.living_room_tv_power }
+      # Or split power by state, e.g. a TV that only wakes from Wake-on-LAN:
+      # power_on:
+      #   service: wake_on_lan.send_magic_packet
+      #   data: { mac: "aa:bb:cc:dd:ee:ff" }
       text:
         service: notify.my_tv
         data: { message: $text }

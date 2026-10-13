@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.3] - 2026-10-13
+
+### Added
+- **`actions.power_on` / `actions.power_off`.** Power can now run a different call depending on whether the player is off or on. Use it for TVs that only wake from Wake-on-LAN: set `power_on` to `wake_on_lan.send_magic_packet` and keep the normal turn-off. Whichever one you leave out uses the built-in power call, and `actions.power` still overrides both.
+
 ## [0.2.2] - 2026-10-11
 
 First release since v0.1.13. It also includes 0.2.0 and 0.2.1, which weren't released on their own (their full notes are in [CHANGELOG.md](https://github.com/evski/ha-glass-remote-card/blob/main/CHANGELOG.md)):
@@ -190,5 +195,6 @@ Not affiliated with or endorsed by Apple Inc. Apple TV is a trademark of Apple I
 - Text: keyboard and dictation text box, and the automatic "wants text" bar.
 - Look and feel: frosted glass styling, thin line icons, haptics.
 
+[0.2.3]: https://github.com/evski/ha-glass-remote-card/releases/tag/v0.2.3
 [0.2.2]: https://github.com/evski/ha-glass-remote-card/releases/tag/v0.2.2
 [0.1.13]: https://github.com/evski/ha-glass-remote-card/releases/tag/v0.1.13

@@ -128,6 +128,16 @@ function ptr(w, el, type, x = 100, y = 100) {
   check("K2 ATV back = menu, hold = top_menu", H.stepsFor(atv, "back", S)[0][2].command === "menu" && H.stepsFor(atv, "back_hold", S)[0][2].command === "top_menu");
   check("K3 ATV long select uses hold_secs", H.stepsFor(atv, "select_hold", S)[0][2].hold_secs === 1);
   check("K4 ATV skip", H.stepsFor(atv, "skip_back", S)[0][2].command === "skip_backward" && H.stepsFor(atv, "skip_fwd", S)[0][2].command === "skip_forward");
+  { // 0.2.3 (Grok Bot, 13 Oct 2026): power_on / power_off overrides follow the player state
+    const lgp = { entity: "media_player.lg", platform: "webostv", actions: { power_on: { service: "wake_on_lan.send_magic_packet", data: { mac: "aa:bb:cc:dd:ee:ff" } } } };
+    check("PW1 power_on used when off", eq(H.stepsFor(lgp, "power", { "media_player.lg": { state: "off" } }), [["wake_on_lan", "send_magic_packet", { mac: "aa:bb:cc:dd:ee:ff" }]]));
+    check("PW2 built-in turn_off when on and no power_off", eq(H.stepsFor(lgp, "power", { "media_player.lg": { state: "on" } }), [["media_player", "turn_off", { entity_id: "media_player.lg" }]]));
+    check("PW3 power_on used when entity missing", H.stepsFor(lgp, "power", {})[0][0] === "wake_on_lan");
+    const both = { ...lgp, actions: { ...lgp.actions, power_off: { service: "script.tv_off" }, power: { service: "script.tv_toggle" } } };
+    check("PW4 actions.power wins", eq(H.stepsFor(both, "power", { "media_player.lg": { state: "off" } }), [["script", "tv_toggle", {}]]));
+    delete both.actions.power;
+    check("PW5 power_off used when on", eq(H.stepsFor(both, "power", { "media_player.lg": { state: "on" } }), [["script", "tv_off", {}]]));
+  }
   check("K5 ATV power on when off", eq(H.stepsFor(bed, "power", S), [["media_player", "turn_on", { entity_id: "media_player.bed_appletv" }]]));
   check("K6 ATV power off when on", H.stepsFor(atv, "power", S)[0][1] === "turn_off");
   check("K7 Kodi arrows", eq(H.stepsFor(kd, "up", S), [["kodi", "call_method", { entity_id: "media_player.kodi", method: "Input.Up" }]]));

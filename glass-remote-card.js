@@ -68,11 +68,16 @@
  * 0.2.2 (Grok Bot, 11 Oct 2026): no duplicate Info. What: while a player shows the bottom-row Info button,
  * "info" is left out of that player's More menu (default or custom `more:` list). Players with CH (no Info
  * button) keep Info in More. Why: Evan: "Good we don't need info in the menu now then".
+ * 0.2.3 (Grok Bot, 13 Oct 2026): state-aware power overrides. What: players[].actions.power_on runs when the
+ * player is off and actions.power_off when it is on; whichever is not set falls back to the built-in power
+ * call (actions.power, if set, still wins for both). Why: Evan's LG TV ignores media_player.turn_on when off
+ * and only wakes from a Wake-on-LAN magic packet (as his Media dashboard's LG remote card sends), while
+ * turning it off still needs media_player.turn_off - a single `power` override cannot do both.
  */
 (() => {
   "use strict";
 
-  const VERSION = "0.2.2";
+  const VERSION = "0.2.3";
   const TAG = "glass-remote-card";
   const PICK_KEY = "glass-remote-card:pick:";
 
@@ -636,7 +641,9 @@
     : v && typeof v === "object" ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, subst(x, text)])) : v;
 
   function stepsFor(p, key, states, text) {
-    const user = p.actions && p.actions[key];
+    let user = p.actions && p.actions[key];
+    // 0.2.3 (Grok Bot, 13 Oct 2026): power_on / power_off pick by the player's state (see header).
+    if (!user && key === "power" && p.actions) user = isOff(states[p.entity]) ? p.actions.power_on : p.actions.power_off;
     if (user) return (Array.isArray(user) ? user : [user]).map((a) => {
       const [domain, service] = String(a.service || a.action || "").split(".");
       return [domain, service, subst({ ...(a.data || a.service_data || {}), ...(a.target || {}) }, text)];
