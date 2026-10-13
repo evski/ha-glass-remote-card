@@ -464,6 +464,41 @@ function ptr(w, el, type, x = 100, y = 100) {
     q.card.hass = { ...q.hass, states: states({ "media_player.avr": { attributes: { source: "UHD" } }, "media_player.lr_tv": { attributes: { source: "Apple TV" } } }) }; await sleep(20);
     check("IP11 on_auto: Auto moving to apple_tv -> PVR", eq(q.hass.calls, [["media_player", "select_source", { entity_id: "media_player.avr", source: "PVR" }]]), q.hass.calls);
     q.card.remove(); w.localStorage.clear();
+    // 0.2.4 (Grok Bot, 13 Oct 2026): control only - press and hold (here right-click) a device: no input switch
+    q = mount(w, pc, states({ "media_player.avr": { attributes: { source: "PVR" } } }));
+    q.$(".pill").click();
+    const row = () => q.card.shadowRoot.querySelector('[data-act="pick:media_player.kodi"]');
+    row().dispatchEvent(new w.MouseEvent("contextmenu", { bubbles: true, cancelable: true })); row() && row().click(); await sleep(20);
+    check("CO1 control-only pick -> Kodi active, no select_source", q.card.activeEntity === "media_player.kodi" && q.hass.calls.length === 0, q.hass.calls);
+    await q.card.press("home"); await sleep(20);
+    check("CO2 buttons skip the input switch (home trigger)", q.hass.calls.length > 0 && !q.hass.calls.some((c) => c[1] === "select_source"), q.hass.calls);
+    q.$(".pill").click();
+    check("CO3 picker row says control only", /control only/.test(row().textContent));
+    row().click(); await sleep(20);
+    check("CO4 a normal tap afterwards switches again", q.hass.calls.some((c) => c[1] === "select_source" && c[2].source === "UHD"), q.hass.calls);
+    q.card.remove(); w.localStorage.clear();
+    const pc2 = CONFIG(); pc2.players[1].input = { entity: "media_player.avr", source: "UHD", triggers: ["home", "pick"] }; pc2.players[1].switch_input = false;
+    q = mount(w, pc2, states({ "media_player.avr": { attributes: { source: "PVR" } } }));
+    q.$(".pill").click(); q.card.shadowRoot.querySelector('[data-act="pick:media_player.kodi"]').click(); await sleep(20);
+    await q.card.press("home"); await sleep(20);
+    check("CO5 switch_input: false never switches", !q.hass.calls.some((c) => c[1] === "select_source"), q.hass.calls);
+    q.card.remove(); w.localStorage.clear();
+    {
+      const pc3 = CONFIG(); pc3.players.forEach((p) => { p.input = { entity: "media_player.avr", source: "X" + p.entity, triggers: ["pick", "any"] }; });
+      const lg = pc3.players.find((p) => /lr_tv/.test(p.entity));
+      q = mount(w, pc3, states({ "media_player.avr": { attributes: { source: "PVR" } } }));
+      q.$(".pill").click();
+      const r3 = q.card.shadowRoot.querySelector(`[data-act="pick:${lg.entity}"]`);
+      r3.dispatchEvent(new w.MouseEvent("contextmenu", { bubbles: true, cancelable: true })); await sleep(20);
+      q.$(".more").click(); await sleep(10);
+      const ts = [...q.card.shadowRoot.querySelectorAll(".menu .mi")].find((b) => b.textContent.includes("TV Settings"));
+      ts && ts.click(); await sleep(20);
+      check("CO8 control-only LG: More > TV Settings sends MENU, no input switch",
+        !!ts && q.hass.calls.some((c) => JSON.stringify(c).includes("MENU")) && !q.hass.calls.some((c) => c[1] === "select_source"), q.hass.calls);
+      q.card.remove(); w.localStorage.clear();
+    }
+    check("CO6 validation: switch_input boolean", bad({ players: [{ entity: "media_player.k", switch_input: "no" }] }));
+    check("CO7 webOS More keeps Settings (TV menu)", H.moreItems({ entity: "media_player.t", platform: "webostv" }, {}).some((x) => x.id === "settings" && x.name === "TV Settings"));
   }
 
   // ---- KB: Kodi keyboard detection --------------------------------------------------------

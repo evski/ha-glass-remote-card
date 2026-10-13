@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.4] - 2026-10-13
+
+### Added
+- **Control only.** Press and hold a device in the picker (right-click on a computer) to control it without switching your receiver or TV input. The picker shows "control only" under it until you pick again or choose Auto. Use it to open the TV's own menus while another input is on screen.
+- **`switch_input: false`** on a player makes it always control-only.
+
+### Changed
+- On LG webOS players, More > Settings is now labelled **TV Settings**.
+
 ## [0.2.3] - 2026-10-13
 
 ### Added

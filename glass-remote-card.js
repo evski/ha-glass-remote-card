@@ -68,6 +68,11 @@
  * 0.2.2 (Grok Bot, 11 Oct 2026): no duplicate Info. What: while a player shows the bottom-row Info button,
  * "info" is left out of that player's More menu (default or custom `more:` list). Players with CH (no Info
  * button) keep Info in More. Why: Evan: "Good we don't need info in the menu now then".
+ * 0.2.4 (Grok Bot, 13 Oct 2026): control a player without switching the room's input. What: press and hold a
+ * device in the picker = "control only": the buttons go to that device but its input switching (AVR/TV
+ * select_source, pick/first/any triggers) is skipped until you pick again or choose Auto. players[].switch_input:
+ * false makes a player always control-only. Why: Evan wanted to drive the LG TV (e.g. More > Settings for the
+ * TV's settings menu) while another input is showing, without the AVR flipping to the TV. No new buttons.
  * 0.2.3 (Grok Bot, 13 Oct 2026): state-aware power overrides. What: players[].actions.power_on runs when the
  * player is off and actions.power_off when it is on; whichever is not set falls back to the built-in power
  * call (actions.power, if set, still wins for both). Why: Evan's LG TV ignores media_player.turn_on when off
@@ -77,7 +82,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "0.2.3";
+  const VERSION = "0.2.4";
   const TAG = "glass-remote-card";
   const PICK_KEY = "glass-remote-card:pick:";
 
@@ -302,6 +307,7 @@
         throw new Error(`glass-remote-card: players[${i}].keyboard_poll must be milliseconds (0 = off)`);
       if (p.channels !== undefined && typeof p.channels !== "boolean") throw new Error(`glass-remote-card: players[${i}].channels must be true or false`);
       if (p.shortcuts !== undefined) p.shortcuts = normaliseShortcuts(p.shortcuts, i); // 0.2.0 (Grok Bot, 11 Oct 2026)
+      if (p.switch_input !== undefined && typeof p.switch_input !== "boolean") throw new Error(`glass-remote-card: players[${i}].switch_input must be true or false`); // 0.2.4
       if (p.info_button !== undefined && typeof p.info_button !== "boolean") throw new Error(`glass-remote-card: players[${i}].info_button must be true or false`); // 0.2.1
       return p;
     });
@@ -467,7 +473,8 @@
     list.forEach((m, i) => {
       if (typeof m === "string") {
         if (m === "info" && infoOnRow) return; // 0.2.2
-        const [name, ic] = MORE_LABELS[m] || [m.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()), null];
+        let [name, ic] = MORE_LABELS[m] || [m.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()), null];
+        if (m === "settings" && p.platform === "webostv") name = "TV Settings"; // 0.2.4 (Grok Bot, 13 Oct 2026): clearer on the LG
         if (m === "sound_mode" || m === "sources") {
           if ((m === "sound_mode" ? soundModeMenu : sourceMenu)(p, states)) out.push({ id: m, name, icon: ic, open: m });
           return;
@@ -860,6 +867,7 @@
     .opt .lines { flex: 1 1 auto; min-width: 0; }
     .opt .l1 { font-size: 15px; font-weight: 500; }
     .opt .l2 { display: none; }
+    .opt .co { font-size: 13px; font-weight: 400; color: var(--grc-dim); margin-left: 8px; } /* 0.2.4: "control only" tag */
     .pill .chev { transition: transform .25s cubic-bezier(.2,.9,.3,1.1); }
     .pill.open .chev { transform: rotate(90deg); }
     /* 0.1.11 (Grok Bot, 11 Oct 2026): the whole pill is one tap target. Children (artwork img / ha-icon, title,
@@ -990,8 +998,8 @@
     get _states() { return (this._hass && this._hass.states) || {}; }
     _pickKey() { return PICK_KEY + (this._config.id || this._config.players.map((p) => p.entity).join(",")); }
     _readPick() { try { return JSON.parse(localStorage.getItem(this._pickKey()) || "null"); } catch (e) { return null; } }
-    _writePick(entity) {
-      try { if (entity) localStorage.setItem(this._pickKey(), JSON.stringify({ entity, ts: Date.now() })); else localStorage.removeItem(this._pickKey()); } catch (e) { /* private mode */ }
+    _writePick(entity, ctl) {
+      try { if (entity) localStorage.setItem(this._pickKey(), JSON.stringify(ctl ? { entity, ts: Date.now(), ctl: true } : { entity, ts: Date.now() })); else localStorage.removeItem(this._pickKey()); } catch (e) { /* private mode */ }
     }
     /** `?player=media_player.x` in the page URL (e.g. from the Sidebar Mini Player's remote button)
      *  picks that player, as if chosen in the picker. Read once per URL. */
@@ -1002,6 +1010,14 @@
       const param = this._config.url_param || "player";
       const want = new URL(href).searchParams.get(param);
       if (want && this._config.players.some((p) => p.entity === want)) { this._writePick(want); this._urlPicked = want; }
+    }
+    /** 0.2.4 (Grok Bot, 13 Oct 2026): true when player p must not switch inputs: switch_input: false, or it
+     *  was picked with press-and-hold ("control only") and that pick is still current. */
+    _controlOnly(p) {
+      if (!p) return false;
+      if (p.switch_input === false) return true;
+      const k = this._readPick();
+      return !!(k && k.ctl && k.entity === p.entity && this._manualPick());
     }
     _manualPick() { const k = this._readPick(); return !!(k && k.entity && Date.now() - k.ts < this._config.pick_timeout * 60000); }
     get activeEntity() { return choosePlayer(this._config, this._states, this._readPick()); }
@@ -1040,7 +1056,7 @@
       const first = this._lastTarget !== p.entity || !this._pressedSinceTarget;
       this._lastTarget = p.entity; this._pressedSinceTarget = true;
       // while a switch is in flight, don't queue another one
-      const sw = this._switching ? [] : inputSteps(p, key, this._states, first);
+      const sw = this._switching || this._controlOnly(p) ? [] : inputSteps(p, key, this._states, first); // 0.2.4
       if (!sw.length) return this._call(keySteps);
       this._switching = true;
       return this._call([...sw, ...keySteps]).finally(() => { this._switching = false; });
@@ -1048,7 +1064,7 @@
     sendText(text, done) {
       const p = this.activePlayer; if (!p) return;
       const steps = (p.actions && p.actions.text) ? stepsFor(p, "text", this._states, text) : PLATFORMS[p.platform].text(p, text, done);
-      const sw = done || PLATFORMS[p.platform].textLive ? inputSteps(p, "text", this._states, false) : [];
+      const sw = !this._controlOnly(p) && (done || PLATFORMS[p.platform].textLive) ? inputSteps(p, "text", this._states, false) : [];
       // 0.1.8: no HA toast per keystroke; one glass hint, and close the sheet if the player says nothing is focused
       return this._call([...sw, ...steps], { quiet: true, onError: (e) => this._textError(p, e) });
     }
@@ -1057,7 +1073,7 @@
     runShortcut(p, sc, text) {
       if (!p || !sc) return Promise.resolve();
       if (sc.kind === "search" && text === undefined) { this._openSearch(p, sc); return Promise.resolve(); }
-      const sw = sc.input && !this._switching ? inputSteps(p, "shortcut", this._states, false) : [];
+      const sw = sc.input && !this._switching && !this._controlOnly(p) ? inputSteps(p, "shortcut", this._states, false) : [];
       const steps = [...sw, ...shortcutSteps(sc, text || "")];
       if (!sw.length) return this._call(steps);
       this._switching = true;
@@ -1390,11 +1406,13 @@
         else this.sendText(this._kbText, false);
         this._closeSheets();
       }
-      else if (act.startsWith("pick:")) {
-        const id = act.slice(5);
-        this._writePick(id === "auto" ? null : id);
+      else if (act.startsWith("pick:") || act.startsWith("ctl:")) {
+        // 0.2.4 (Grok Bot, 13 Oct 2026): "ctl:" = press and hold in the picker: control only, input left alone
+        const ctl = act.startsWith("ctl:"), id = act.slice(ctl ? 4 : 5);
+        this._writePick(id === "auto" ? null : id, ctl);
         this._closeSheets();
-        if (id !== "auto") this._pickInputs(id, false);
+        if (ctl) { const p = this._config.players.find((x) => x.entity === id); this._toast(`Controlling ${this._friendly(p)} · input unchanged`, 2500); }
+        else if (id !== "auto") this._pickInputs(id, false);
         this._update();
       }
       else if (act === "exit") {
@@ -1406,7 +1424,7 @@
     /** Switch the room's AVR/TV to `entity`'s input (inputs with triggers: [pick]). auto = Auto chose it. */
     _pickInputs(entity, auto) {
       const p = this._config.players.find((x) => x.entity === entity);
-      if (!p || !p.input || this._switching) return;
+      if (!p || !p.input || this._switching || this._controlOnly(p)) return; // 0.2.4
       const steps = inputSteps(p, "pick", this._states, false, { auto });
       if (!steps.length) return;
       this._switching = true;
@@ -1465,13 +1483,27 @@
       let html = opt("auto", icon("auto"), "Auto", "Follows what you're watching", !manual);
       for (const p of this._config.players) {
         const st = this._states[p.entity];
-        html += opt(p.entity, icon("tv"), this._friendly(p), st ? st.state.replace(/_/g, " ") : "unavailable", manual && p.entity === active);
+        const sel = manual && p.entity === active;
+        // 0.2.4: a control-only pick says so under its name
+        const l2 = (st ? st.state.replace(/_/g, " ") : "unavailable") + (sel && pick.ctl ? " · control only" : "");
+        html += opt(p.entity, icon("tv"), this._friendly(p), l2, sel).replace(/(<span class="l1">[^<]*)<\/span>/, sel && pick.ctl ? '$1<span class="co">control only</span></span>' : "$1</span>");
       }
       if (this._config.layout === "fullscreen" && this._config.show_exit)
         html += `<button class="opt" data-act="exit"><span class="tick"></span><span class="art">${icon("exit")}</span><span class="lines"><span class="l1">Exit remote</span><span class="l2">Back to your dashboard</span></span></button>`;
       const box = this.shadowRoot.querySelector(".opts");
       box.innerHTML = html;
-      box.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); this._act(b.dataset.act); }));
+      box.querySelectorAll("[data-act]").forEach((b) => {
+        // 0.2.4 (Grok Bot, 13 Oct 2026): press and hold a device (or right-click) = control only, no input switch
+        const ctl = b.dataset.act.startsWith("pick:") && b.dataset.act !== "pick:auto" ? "ctl:" + b.dataset.act.slice(5) : null;
+        let held = false, t = null;
+        const cancel = () => { clearTimeout(t); t = null; };
+        if (ctl) {
+          b.addEventListener("pointerdown", () => { held = false; cancel(); t = setTimeout(() => { held = true; this._haptic("medium"); this._act(ctl); }, 550); });
+          ["pointerup", "pointerleave", "pointercancel"].forEach((ev) => b.addEventListener(ev, cancel));
+          b.addEventListener("contextmenu", (e) => { e.preventDefault(); e.stopPropagation(); cancel(); if (!held) { held = true; this._act(ctl); } });
+        }
+        b.addEventListener("click", (e) => { e.stopPropagation(); if (held) { held = false; return; } this._act(b.dataset.act); });
+      });
     }
 
     // ---- update ------------------------------------------------------------

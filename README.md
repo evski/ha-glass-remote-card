@@ -166,6 +166,7 @@ source_map:                               # optional: follow the TV's input
 | `more` | Items in the ⋯ menu, or `false` to hide it. |
 | `shortcuts` | Your own service calls, shown as the first section of the ⋯ menu while this player is active. A search shortcut asks for text first. See [Shortcuts](#shortcuts). |
 | `channels` | Show the CH up/down control. |
+| `switch_input` | `true` by default. `false` = never run this player's `input` switching; the buttons just control it. |
 | `info_button` | `true` by default: an Info (i) button in the bottom row's right-hand slot when the player has no CH control. While it shows, `info` is left out of that player's More menu. `false` hides it and puts Info back in More. |
 | `keyboard_poll` | Kodi: how often (ms) to check whether Kodi's on-screen keyboard is open. Default `2000`; `0` turns it off. Also settable on the card. See [Kodi keyboard detection](#kodi-keyboard-detection). |
 | `keyboard_poll_during_video` | Kodi: keep checking while a video plays. Default `false`. |
@@ -445,6 +446,10 @@ Notes:
           service: script.tv_input
           data: { input: $source }
 ```
+
+### Control only (no input switch)
+
+Press and hold a device in the picker (right-click on a computer) to control it **without** switching inputs. Handy for opening the TV's settings (More > TV Settings on LG) while another input is showing. The row shows "control only"; tap any device normally, or pick Auto, to go back.
 
 ## Open it from your phone's control centre
 
