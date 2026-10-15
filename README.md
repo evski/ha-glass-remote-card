@@ -38,7 +38,7 @@ One card drives Kodi, LG webOS TVs, devices from Home Assistant's Apple TV integ
   - A bottom row inside the pad: **sources list | -10 | ⋯ more | +10 | CH**. Tap **CH** to open the channel stack (up chevron, CH, down chevron). Tap CH again to close it, or it closes by itself after 5 s. CH only shows on devices with channel keys. On devices without them (Kodi by default), that slot is an **Info** (i) button instead, and Info is then left out of that device's More menu.
   - **Sources** opens a glass picker with the player's sources, or those of your receiver or TV. The current source is ticked.
   - **More (⋯)** holds info (unless the device has the Info button on the row), subtitles, sound mode and each platform's extras.
-  - **PIN Pad** in the More menu (Apple TV players by default): type a code on a number pad and the card enters it on an app's own on-screen number grid, such as YouTube's parent code screen, where no keyboard comes up. See [PIN pad](#pin-pad).
+  - **PIN Pad** in the More menu (Apple TV players by default, while YouTube is open): type a code on a number pad and the card enters it on an app's own on-screen number grid, such as YouTube's parent code screen, where no keyboard comes up. See [PIN pad](#pin-pad).
   - **Shortcuts** you define per player (an add-on search, a favourite list, a scene) appear as the first section of the More menu while that player is active. Search shortcuts ask for text in the typing sheet first. See [Shortcuts](#shortcuts).
   - Play/pause, a big Back button and Home underneath. Long-press Back for the top menu and Home for the platform's extra action.
 - **Volume tabs on the pad's edge.** Holding a tab repeats. Press and hold the speaker badge between the tabs to pick the receiver's **sound mode**. Volume can go to a receiver, with a fallback when the receiver is off, or through the player's `remote` entity (HDMI-CEC/IR).
@@ -168,7 +168,7 @@ source_map:                               # optional: follow the TV's input
 | `shortcuts` | Your own service calls, shown as the first section of the ⋯ menu while this player is active. A search shortcut asks for text first. See [Shortcuts](#shortcuts). |
 | `channels` | Show the CH up/down control. |
 | `switch_input` | `true` by default. `false` = never run this player's `input` switching; the buttons just control it. |
-| `pin_pad` | On by default for `apple_tv`: a **PIN Pad** item in More that enters a code on an app's on-screen number grid. `false` hides it; `true` or an object adds it to other players with arrow keys. See [PIN pad](#pin-pad). |
+| `pin_pad` | On by default for `apple_tv`, shown while the player is in YouTube: a **PIN Pad** item in More that enters a code on an app's on-screen number grid. `false` hides it; `true` or an object adds it to other players with arrow keys. See [PIN pad](#pin-pad). |
 | `info_button` | `true` by default: an Info (i) button in the bottom row's right-hand slot when the player has no CH control. While it shows, `info` is left out of that player's More menu. `false` hides it and puts Info back in More. |
 | `keyboard_poll` | Kodi: how often (ms) to check whether Kodi's on-screen keyboard is open. Default `2000`; `0` turns it off. Also settable on the card. See [Kodi keyboard detection](#kodi-keyboard-detection). |
 | `keyboard_poll_during_video` | Kodi: keep checking while a video plays. Default `false`. |
@@ -353,7 +353,10 @@ It's on for `apple_tv` players, set up for YouTube's grid (1 to 9 in three rows,
       select: select         # the key pressed on each digit
       length: 4              # sent as soon as this many digits are typed; 0 = only when you press Send
       delay: 0.3             # seconds between presses
+      apps: [YouTube]        # only offer it while the player is in one of these apps; [] = always
 ```
+
+**Only in the right app.** PIN Pad only appears in More while the player is in one of the `apps`: each entry is compared, ignoring case, with the player's `app_id`, the last part of the `app_id` after the final dot, its `app_name` and its `source`. With the built-in grid the default is `[YouTube]`, which matches the YouTube app by name and by id. With your own `rows` the default is `[]` (always shown). The app is checked again when the code is sent: if you've left the app while typing, nothing is sent and a short message says why.
 
 `pin_pad: false` hides it. On another player (`webostv`, `kodi`, or `generic` with a `remote`), `pin_pad: true` adds it with these defaults, and each press is a separate call with `delay` between them.
 

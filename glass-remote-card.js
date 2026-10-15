@@ -68,6 +68,10 @@
  * 0.2.2 (Grok Bot, 11 Oct 2026): no duplicate Info. What: while a player shows the bottom-row Info button,
  * "info" is left out of that player's More menu (default or custom `more:` list). Players with CH (no Info
  * button) keep Info in More. Why: Evan: "Good we don't need info in the menu now then".
+ * 0.2.6 (Grok Bot, 15 Oct 2026): PIN Pad only in the app it's for. What: pin_pad.apps (app ids or names, matched
+ * case-insensitively against the player's app_id, the app_id's last dotted part, app_name or source; default ["YouTube"]
+ * for the built-in grid, which matches both the YouTube app's name and its id; [] or null = always). The More item only shows while the player is in one of them, and the send is checked again: if the
+ * app changed meanwhile, a toast and nothing is sent. Why: Evan - only offer/use it in the YouTube app.
  * 0.2.5 (Grok Bot, 15 Oct 2026): PIN pad for in-app code grids. What: More > "PIN Pad" (Apple TV players by default,
  * any player with d-pad keys via players[].pin_pad) opens a small number sheet; the digits are entered on the TV by
  * walking the app's on-screen grid with up/down/left/right + select, one remote.send_command list with delay_secs.
@@ -89,7 +93,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "0.2.5";
+  const VERSION = "0.2.6";
   const TAG = "glass-remote-card";
   const PICK_KEY = "glass-remote-card:pick:";
 
@@ -498,7 +502,8 @@
       if (steps.length) out.push({ id: "custom" + i, name: String(m.name), icon: m.icon || null, steps });
     });
     // 0.2.5 (Grok Bot, 15 Oct 2026): PIN Pad opens the number sheet (normalised pin_pad only)
-    if (p.pin_pad && Array.isArray(p.pin_pad.rows)) out.push({ id: "pin_pad", name: p.pin_pad.name, icon: "pin_pad", pin: true });
+    if (p.pin_pad && Array.isArray(p.pin_pad.rows) && pinAppOk(p.pin_pad, (states || {})[p.entity])) // 0.2.6: only in its app
+      out.push({ id: "pin_pad", name: p.pin_pad.name, icon: "pin_pad", pin: true });
     return out;
   }
   // ---------------------------------------------------------------------------
@@ -584,11 +589,14 @@
   //     select: select               # the key pressed on each digit
   //     length: 4                    # digits: sent as soon as this many are typed; 0 = only on Send
   //     delay: 0.3                   # seconds between presses
+  //     apps: [YouTube]              # 0.2.6: only while the player's app_id (or its last dotted part), app_name or
+  //                                  # source is one of these (default for the built-in grid; with your own rows the
+  //                                  # default is always). [] or null = always.
   // Moves only pass over single-cell keys (a wide key's column is ambiguous) and never leave the grid.
   // ---------------------------------------------------------------------------
   const PIN_DIRS = { up: [-1, 0], down: [1, 0], left: [0, -1], right: [0, 1] };
   const PIN_DEFAULT = { name: "PIN Pad", rows: [["1", "2", "3"], ["4", "5", "6"], ["7", "8", "9"], ["0", "del", "del"]],
-    reset: ["up", "right"], start: "1", select: "select", length: 4, delay: 0.3 };
+    reset: ["up", "right"], start: "1", select: "select", length: 4, delay: 0.3, apps: ["YouTube"] };
   function normalisePinPad(raw, p, i) {
     const where = `glass-remote-card: players[${i}].pin_pad`;
     if (raw === false || (raw && typeof raw === "object" && raw.enabled === false)) return null;
@@ -599,6 +607,11 @@
     if (!hasDpad) throw new Error(`${where}: this player has no up/down/left/right/select keys to walk the grid with`);
     const o = { ...PIN_DEFAULT, ...raw };
     delete o.enabled;
+    // 0.2.6: the YouTube app list only goes with the YouTube grid; your own rows default to "always"
+    if (raw.apps === undefined && raw.rows !== undefined) o.apps = [];
+    if (o.apps == null) o.apps = [];
+    if (typeof o.apps === "string") o.apps = [o.apps];
+    if (!Array.isArray(o.apps) || !o.apps.every((a) => typeof a === "string" && a)) throw new Error(`${where}.apps must be a list of app ids or names ([] = always)`);
     if (!Array.isArray(o.rows) || !o.rows.length || !o.rows.every((r) => Array.isArray(r) && r.length))
       throw new Error(`${where}.rows must be a list of rows, each a list of keys`);
     o.rows = o.rows.map((r) => r.map((k) => (k == null ? "" : String(k))));
@@ -624,6 +637,18 @@
     o.name = String(o.name);
     return o;
   }
+  /** 0.2.6 (Grok Bot, 15 Oct 2026): true when the PIN pad may be used now: no `apps` list, or the player's
+   *  app_id, the app_id's last dotted part, app_name or source (case-insensitive) is in it. */
+  function pinAppOk(pp, st) {
+    if (!pp) return false;
+    if (!pp.apps || !pp.apps.length) return true;
+    const a = (st && st.attributes) || {};
+    const id = a.app_id != null ? String(a.app_id) : "";
+    const now = [id, id.includes(".") ? id.split(".").pop() : "", a.app_name, a.source].filter((v) => v != null && v !== "").map((v) => String(v).toLowerCase());
+    return pp.apps.some((x) => now.includes(String(x).toLowerCase()));
+  }
+  /** Short name of the app list for messages ("YouTube"): the first entry that isn't a dotted id. */
+  const pinAppLabel = (pp) => (pp.apps.find((x) => !/^[\w-]+(\.[\w-]+)+$/.test(x)) || pp.apps[0] || "");
   /** key -> [[row, col], ...] for a grid of rows. */
   function pinCells(rows) {
     const out = {};
@@ -1619,6 +1644,8 @@
       const p = this._pinPlayer(); if (!p) return;
       const digits = this._pin.digits;
       if (!digits) { this._toast("Type the code first"); return; }
+      // 0.2.6 (Grok Bot, 15 Oct 2026): the app may have changed while the sheet was open: don't press around in another app
+      if (!pinAppOk(p.pin_pad, this._states[p.entity])) { this._closeSheets(); this._toast(`Not sent: ${this._friendly(p)} isn't in ${pinAppLabel(p.pin_pad)}`, 2500); return; }
       let steps;
       try { steps = pinSteps(p, pinSequence(p.pin_pad, digits), this._states, p.pin_pad.delay); }
       catch (e) { this._toast(String(e.message || e).replace(/^glass-remote-card: /, "")); return; }
@@ -1773,7 +1800,7 @@
 
   // Exposed for tests and power users.
   GlassRemoteCard.VERSION = VERSION;
-  GlassRemoteCard.helpers = { normalisePinPad, pinPath, pinSequence, pinSteps, kbFocus, kbPollInterval, kodiKeyboardFromEvent, sourceMenu, soundModeMenu, optionSteps, moreItems, hasChannels, hasInfoButton, bannerText, normaliseShortcuts, shortcutSteps, fillText, normaliseConfig, inputSteps, choosePlayer, volumeTarget, nowPlaying, stepsFor, swipeDirection, guessPlatform, PLATFORMS, ICONS };
+  GlassRemoteCard.helpers = { normalisePinPad, pinAppOk, pinPath, pinSequence, pinSteps, kbFocus, kbPollInterval, kodiKeyboardFromEvent, sourceMenu, soundModeMenu, optionSteps, moreItems, hasChannels, hasInfoButton, bannerText, normaliseShortcuts, shortcutSteps, fillText, normaliseConfig, inputSteps, choosePlayer, volumeTarget, nowPlaying, stepsFor, swipeDirection, guessPlatform, PLATFORMS, ICONS };
 
   if (!customElements.get(TAG)) customElements.define(TAG, GlassRemoteCard);
   window.customCards = window.customCards || [];

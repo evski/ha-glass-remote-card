@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.6] - 2026-10-15
+
+### Added
+- **`pin_pad.apps`.** A list of app ids or names. PIN Pad is only offered while the player is in one of them. Each entry is compared, ignoring case, with the player's `app_id` (or the part after its last dot), `app_name` or `source`. `[]` or `null` means always.
+
+### Changed
+- With the built-in grid, PIN Pad now only shows in More while YouTube is open (default `apps: [YouTube]`). With your own `rows`, the default is still always.
+- The app is checked again when the code is sent. If the player has left the app, nothing is sent and a short message says why.
+
 ## [0.2.5] - 2026-10-15
 
 ### Added
@@ -210,6 +219,7 @@ Not affiliated with or endorsed by Apple Inc. Apple TV is a trademark of Apple I
 - Text: keyboard and dictation text box, and the automatic "wants text" bar.
 - Look and feel: frosted glass styling, thin line icons, haptics.
 
+[0.2.6]: https://github.com/evski/ha-glass-remote-card/releases/tag/v0.2.6
 [0.2.5]: https://github.com/evski/ha-glass-remote-card/releases/tag/v0.2.5
 [0.2.4]: https://github.com/evski/ha-glass-remote-card/releases/tag/v0.2.4
 [0.2.3]: https://github.com/evski/ha-glass-remote-card/releases/tag/v0.2.3

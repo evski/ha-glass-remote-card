@@ -1034,6 +1034,44 @@ function ptr(w, el, type, x = 100, y = 100) {
     f.$(".more").click(); await sleep(10);
     check("PP22 pin_pad: false -> no PIN Pad on the Apple TV", ![...f.card.shadowRoot.querySelectorAll(".menu .mi .nm")].some((n) => n.textContent === "PIN Pad"));
     f.card.remove(); w.localStorage.clear();
+    // ---- 0.2.6 (Grok Bot, 15 Oct 2026): PIN Pad only in the YouTube app (pin_pad.apps) ----
+    check("PP23 apps: [YouTube] by default; own rows -> always; null / [] -> always; a string -> list; bad -> error",
+      eq(atv.pin_pad.apps, ["YouTube"]) && eq(phone.pin_pad.apps, []) && eq(N({ apps: null }).pin_pad.apps, []) &&
+      eq(N({ apps: [] }).pin_pad.apps, []) && eq(N({ apps: "Netflix" }).pin_pad.apps, ["Netflix"]) && bad2({ apps: 5 }) && bad2({ apps: [""] }));
+    const yt = atv.pin_pad;
+    check("PP24 pinAppOk: app_id (full or its last dotted part), app_name (any case) or source matches; other app / off / no state don't; [] = always",
+      H.pinAppOk(yt, { state: "playing", attributes: { app_id: "com.google.tv.youtube" } }) && H.pinAppOk(N({ apps: ["com.example.Code"] }).pin_pad, { attributes: { app_id: "com.example.code" } }) && !H.pinAppOk(yt, { attributes: { app_id: "com.youtube.kids" } }) && H.pinAppOk(yt, { state: "idle", attributes: { app_name: "youtube" } }) &&
+      H.pinAppOk(yt, { state: "on", attributes: { source: "YouTube" } }) && !H.pinAppOk(yt, { state: "idle", attributes: { app_id: "com.netflix.Netflix", app_name: "Netflix" } }) &&
+      !H.pinAppOk(yt, { state: "off", attributes: {} }) && !H.pinAppOk(yt, undefined) && H.pinAppOk(N({ apps: [] }).pin_pad, undefined));
+    {
+      const inApp = (app_id, app_name) => states({ "media_player.kodi": { state: "idle" }, "media_player.lr_tv": { attributes: { source: "Apple TV" } },
+        "media_player.lr_appletv": { attributes: { app_id, app_name } } });
+      const hasPin = (ff) => [...ff.card.shadowRoot.querySelectorAll(".menu .mi .nm")].some((n) => n.textContent === "PIN Pad");
+      w.localStorage.clear();
+      let g = mount(w, CONFIG(), inApp("com.apple.TVWatchList", "TV"));
+      g.$(".more").click(); await sleep(10);
+      check("PP25 Apple TV in another app (TV): no PIN Pad in More", g.card.activeEntity === "media_player.lr_appletv" && !hasPin(g) && g.card.shadowRoot.querySelectorAll(".menu .mi").length > 0);
+      g.card.remove(); w.localStorage.clear();
+      g = mount(w, CONFIG(), inApp("com.google.tv.youtube", null)); // app_id only (Evan's live id ends in .youtube too)
+      g.$(".more").click(); await sleep(10);
+      check("PP26 in YouTube (app_id only): PIN Pad shown", hasPin(g));
+      let rs = [...g.card.shadowRoot.querySelectorAll(".menu .mi")]; rs[rs.length - 1].click(); await sleep(10);
+      g.hass.calls.length = 0;
+      ["1", "2", "3"].forEach((k) => g.$(`.pin [data-pin="${k}"]`).click());
+      // the user leaves YouTube while the sheet is open
+      const moved = fakeHass(inApp("com.netflix.Netflix", "Netflix")); g.card.hass = moved; await sleep(10);
+      g.$('.pin [data-pin="4"]').click(); await sleep(300);
+      check("PP27 app changed before the 4th digit: nothing sent, sheet closed, toast says why",
+        moved.calls.length === 0 && g.hass.calls.length === 0 && !g.$(".pin").classList.contains("show") && /Not sent: .*isn't in YouTube/.test(g.$(".toast").textContent), [moved.calls, g.$(".toast").textContent]);
+      g.$(".more").click(); await sleep(10);
+      check("PP28 ...and More no longer offers it", !hasPin(g));
+      g.card.remove(); w.localStorage.clear();
+      const cfgA = CONFIG(); cfgA.players[0].pin_pad = { apps: [] };
+      g = mount(w, cfgA, inApp("com.netflix.Netflix", "Netflix"));
+      g.$(".more").click(); await sleep(10);
+      check("PP29 apps: [] -> offered in any app", hasPin(g));
+      g.card.remove(); w.localStorage.clear();
+    }
   }
 
   // URL pick (Sidebar Mini Player remote_path: /remote?player={entity})
