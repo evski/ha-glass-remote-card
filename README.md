@@ -38,6 +38,7 @@ One card drives Kodi, LG webOS TVs, devices from Home Assistant's Apple TV integ
   - A bottom row inside the pad: **sources list | -10 | ⋯ more | +10 | CH**. Tap **CH** to open the channel stack (up chevron, CH, down chevron). Tap CH again to close it, or it closes by itself after 5 s. CH only shows on devices with channel keys. On devices without them (Kodi by default), that slot is an **Info** (i) button instead, and Info is then left out of that device's More menu.
   - **Sources** opens a glass picker with the player's sources, or those of your receiver or TV. The current source is ticked.
   - **More (⋯)** holds info (unless the device has the Info button on the row), subtitles, sound mode and each platform's extras.
+  - **PIN Pad** in the More menu (Apple TV players by default): type a code on a number pad and the card enters it on an app's own on-screen number grid, such as YouTube's parent code screen, where no keyboard comes up. See [PIN pad](#pin-pad).
   - **Shortcuts** you define per player (an add-on search, a favourite list, a scene) appear as the first section of the More menu while that player is active. Search shortcuts ask for text in the typing sheet first. See [Shortcuts](#shortcuts).
   - Play/pause, a big Back button and Home underneath. Long-press Back for the top menu and Home for the platform's extra action.
 - **Volume tabs on the pad's edge.** Holding a tab repeats. Press and hold the speaker badge between the tabs to pick the receiver's **sound mode**. Volume can go to a receiver, with a fallback when the receiver is off, or through the player's `remote` entity (HDMI-CEC/IR).
@@ -167,6 +168,7 @@ source_map:                               # optional: follow the TV's input
 | `shortcuts` | Your own service calls, shown as the first section of the ⋯ menu while this player is active. A search shortcut asks for text first. See [Shortcuts](#shortcuts). |
 | `channels` | Show the CH up/down control. |
 | `switch_input` | `true` by default. `false` = never run this player's `input` switching; the buttons just control it. |
+| `pin_pad` | On by default for `apple_tv`: a **PIN Pad** item in More that enters a code on an app's on-screen number grid. `false` hides it; `true` or an object adds it to other players with arrow keys. See [PIN pad](#pin-pad). |
 | `info_button` | `true` by default: an Info (i) button in the bottom row's right-hand slot when the player has no CH control. While it shows, `info` is left out of that player's More menu. `false` hides it and puts Info back in More. |
 | `keyboard_poll` | Kodi: how often (ms) to check whether Kodi's on-screen keyboard is open. Default `2000`; `0` turns it off. Also settable on the card. See [Kodi keyboard detection](#kodi-keyboard-detection). |
 | `keyboard_poll_during_video` | Kodi: keep checking while a video plays. Default `false`. |
@@ -328,6 +330,32 @@ The card fills these in itself, so they work with any service, not only template
 A shortcut can also run a script that does more work, for example `service: script.turn_on` with `target: { entity_id: script.movie_night }`, or `service: script.search_something` with `data: { variables: { term: "{text}" } }`.
 
 ![More menu with shortcuts](docs/images/shortcuts-menu.png)
+
+### PIN pad
+
+Some apps ask for a code on their own number grid instead of bringing up a keyboard, for example YouTube's "Enter parent code" screen. Moving around that grid with the touchpad is slow, so **More (⋯) > PIN Pad** opens a small number pad. Type the code: the dots fill in, and when the last digit is in the card enters the code on the TV and closes. Nothing is sent before that. Use ⌫ to fix a mistake first.
+
+How it enters the code: it presses up and right enough times to reach the grid's top-right key whatever was selected, then for each digit moves to it with the arrow keys and presses select. On the Apple TV this is a single `remote.send_command` with the whole list and `delay_secs`, so it takes a few seconds; leave the remote alone until it's done.
+
+It's on for `apple_tv` players, set up for YouTube's grid (1 to 9 in three rows, then 0 with a wide backspace beside it). Other grids and players are configurable:
+
+```yaml
+    pin_pad:
+      name: PIN Pad          # the More menu label
+      rows:                  # the app's grid, top to bottom; a key that spans cells is repeated, "" = empty cell
+        - [1, 2, 3]
+        - [4, 5, 6]
+        - [7, 8, 9]
+        - [0, del, del]
+      reset: [up, right]     # pressed first, (rows - 1) / (columns - 1) times, to start from that corner.
+                             # Pick edges the app doesn't let focus leave from. false = start from `start`
+      start: "1"             # the key selected when the screen opens (used with reset: false)
+      select: select         # the key pressed on each digit
+      length: 4              # sent as soon as this many digits are typed; 0 = only when you press Send
+      delay: 0.3             # seconds between presses
+```
+
+`pin_pad: false` hides it. On another player (`webostv`, `kodi`, or `generic` with a `remote`), `pin_pad: true` adds it with these defaults, and each press is a separate call with `delay` between them.
 
 ### CH (channel up/down)
 

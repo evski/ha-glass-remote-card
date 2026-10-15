@@ -68,6 +68,13 @@
  * 0.2.2 (Grok Bot, 11 Oct 2026): no duplicate Info. What: while a player shows the bottom-row Info button,
  * "info" is left out of that player's More menu (default or custom `more:` list). Players with CH (no Info
  * button) keep Info in More. Why: Evan: "Good we don't need info in the menu now then".
+ * 0.2.5 (Grok Bot, 15 Oct 2026): PIN pad for in-app code grids. What: More > "PIN Pad" (Apple TV players by default,
+ * any player with d-pad keys via players[].pin_pad) opens a small number sheet; the digits are entered on the TV by
+ * walking the app's on-screen grid with up/down/left/right + select, one remote.send_command list with delay_secs.
+ * First it presses up (rows-1) and right (cols-1) so focus starts from a known corner whatever was focused (the grid's
+ * top-right; left from column 1 can jump out of the grid to other buttons on the screen). Default grid = YouTube's
+ * "Enter parent code" pad (1-9, then 0 + a wide backspace). Why: Evan - YouTube's parent code screen is its own
+ * number grid, so no system keyboard comes up and entering it with the touchpad is tedious.
  * 0.2.4 (Grok Bot, 13 Oct 2026): control a player without switching the room's input. What: press and hold a
  * device in the picker = "control only": the buttons go to that device but its input switching (AVR/TV
  * select_source, pick/first/any triggers) is skipped until you pick again or choose Auto. players[].switch_input:
@@ -82,7 +89,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "0.2.4";
+  const VERSION = "0.2.5";
   const TAG = "glass-remote-card";
   const PICK_KEY = "glass-remote-card:pick:";
 
@@ -130,6 +137,9 @@
     close: svg('<path d="M6 6l12 12M18 6 6 18"/>', 1.8),
     // 0.2.0 (Grok Bot, 11 Oct 2026): default icon for search shortcuts in the More menu
     search: svg('<circle cx="10.5" cy="10.5" r="6.2"/><path d="M15.2 15.2 20.5 20.5"/>', 1.7),
+    // 0.2.5 (Grok Bot, 15 Oct 2026): PIN Pad item in the More menu, a 3x4 key grid
+    pin_pad: svg([4, 9.5, 15, 20].map((y, r) => (r < 3 ? [6.5, 12, 17.5] : [12]).map((x) => `<circle cx="${x}" cy="${y}" r="1.6"/>`).join("")).join(""), 1.5),
+    backspace: svg('<path d="M8.5 5.5H20a1.5 1.5 0 0 1 1.5 1.5v10a1.5 1.5 0 0 1-1.5 1.5H8.5L2.5 12z"/><path d="M11.5 9.5l5 5M16.5 9.5l-5 5"/>', 1.5),
   };
 
   // CH control (0.1.4, Grok Bot 11 Oct 2026): each glyph holds the collapsed thin cap and the open
@@ -309,6 +319,7 @@
       if (p.shortcuts !== undefined) p.shortcuts = normaliseShortcuts(p.shortcuts, i); // 0.2.0 (Grok Bot, 11 Oct 2026)
       if (p.switch_input !== undefined && typeof p.switch_input !== "boolean") throw new Error(`glass-remote-card: players[${i}].switch_input must be true or false`); // 0.2.4
       if (p.info_button !== undefined && typeof p.info_button !== "boolean") throw new Error(`glass-remote-card: players[${i}].info_button must be true or false`); // 0.2.1
+      p.pin_pad = normalisePinPad(p.pin_pad, p, i); // 0.2.5 (Grok Bot, 15 Oct 2026): null = no PIN Pad for this player
       return p;
     });
     const out = {
@@ -486,6 +497,8 @@
       const steps = m.key ? stepsFor(p, m.key, states) : stepsFor({ ...p, actions: { __more: m } }, "__more", states);
       if (steps.length) out.push({ id: "custom" + i, name: String(m.name), icon: m.icon || null, steps });
     });
+    // 0.2.5 (Grok Bot, 15 Oct 2026): PIN Pad opens the number sheet (normalised pin_pad only)
+    if (p.pin_pad && Array.isArray(p.pin_pad.rows)) out.push({ id: "pin_pad", name: p.pin_pad.name, icon: "pin_pad", pin: true });
     return out;
   }
   // ---------------------------------------------------------------------------
@@ -552,6 +565,127 @@
   const hasInfoButton = (p, states) => p.info_button !== false && !hasChannels(p) && stepsFor(p, "info", states || {}).length > 0;
   const hasChannels = (p) => !!(p.channels === undefined ? PLATFORMS[p.platform].channels : p.channels) &&
     !!(PLATFORMS[p.platform].keys.channel_up || (p.actions && p.actions.channel_up));
+
+  // ---------------------------------------------------------------------------
+  // PIN pad (0.2.5, Grok Bot 15 Oct 2026). Some apps ask for a code on their own on-screen number grid (no
+  // system keyboard). The card walks that grid with the d-pad: players[].pin_pad
+  //   pin_pad: false                 # hide it (on by default for apple_tv players)
+  //   pin_pad:                       # or true for the defaults below; any other platform needs this to show it
+  //     name: PIN Pad                # More menu label
+  //     rows:                        # the app's grid, top to bottom; a key over several cells repeats its name,
+  //       - [1, 2, 3]                # "" or null = empty cell. Default: YouTube's parent-code pad.
+  //       - [4, 5, 6]
+  //       - [7, 8, 9]
+  //       - [0, del, del]
+  //     reset: [up, right]           # pressed first, (rows-1) / (cols-1) times each, so focus starts in that corner
+  //                                  # whatever was focused (needs a grid that doesn't let focus out that way).
+  //                                  # false = no reset, start from `start`.
+  //     start: "1"                   # the focused key when the screen opens (used with reset: false)
+  //     select: select               # the key pressed on each digit
+  //     length: 4                    # digits: sent as soon as this many are typed; 0 = only on Send
+  //     delay: 0.3                   # seconds between presses
+  // Moves only pass over single-cell keys (a wide key's column is ambiguous) and never leave the grid.
+  // ---------------------------------------------------------------------------
+  const PIN_DIRS = { up: [-1, 0], down: [1, 0], left: [0, -1], right: [0, 1] };
+  const PIN_DEFAULT = { name: "PIN Pad", rows: [["1", "2", "3"], ["4", "5", "6"], ["7", "8", "9"], ["0", "del", "del"]],
+    reset: ["up", "right"], start: "1", select: "select", length: 4, delay: 0.3 };
+  function normalisePinPad(raw, p, i) {
+    const where = `glass-remote-card: players[${i}].pin_pad`;
+    if (raw === false || (raw && typeof raw === "object" && raw.enabled === false)) return null;
+    const hasDpad = ["up", "down", "left", "right", "select"].every((k) => stepsFor(p, k, {}).length > 0);
+    if (raw === undefined || raw === null) { if (p.platform !== "apple_tv") return null; raw = {}; }
+    else if (raw === true) raw = {};
+    else if (typeof raw !== "object" || Array.isArray(raw)) throw new Error(`${where} must be true, false or an object`);
+    if (!hasDpad) throw new Error(`${where}: this player has no up/down/left/right/select keys to walk the grid with`);
+    const o = { ...PIN_DEFAULT, ...raw };
+    delete o.enabled;
+    if (!Array.isArray(o.rows) || !o.rows.length || !o.rows.every((r) => Array.isArray(r) && r.length))
+      throw new Error(`${where}.rows must be a list of rows, each a list of keys`);
+    o.rows = o.rows.map((r) => r.map((k) => (k == null ? "" : String(k))));
+    const cells = pinCells(o.rows);
+    for (let d = 0; d <= 9; d++) {
+      const c = cells[String(d)];
+      if (!c || c.length !== 1) throw new Error(`${where}.rows: digit ${d} must be in exactly one cell`);
+    }
+    o.start = String(o.start);
+    if (!cells[o.start] || cells[o.start].length !== 1) throw new Error(`${where}.start: "${o.start}" isn't a single key of rows`);
+    if (o.reset === true) o.reset = PIN_DEFAULT.reset.slice();
+    if (o.reset === false || o.reset == null) o.reset = [];
+    if (!Array.isArray(o.reset) || !o.reset.every((d) => PIN_DIRS[d])) throw new Error(`${where}.reset must be a list of up/down/left/right (or false)`);
+    if (o.reset.length) {
+      const c = pinResetCell(o);
+      const k = o.rows[c[0]][c[1]];
+      if (!k || cells[k].length !== 1) throw new Error(`${where}.reset ends on an empty or wide cell; choose other directions`);
+    }
+    o.select = String(o.select);
+    if (!stepsFor(p, o.select, {}).length) throw new Error(`${where}.select: this player has no "${o.select}" key`);
+    if (!Number.isInteger(o.length) || o.length < 0 || o.length > 12) throw new Error(`${where}.length must be 0-12 (0 = send with the Send button)`);
+    if (typeof o.delay !== "number" || o.delay < 0 || o.delay > 5) throw new Error(`${where}.delay must be seconds (0-5)`);
+    o.name = String(o.name);
+    return o;
+  }
+  /** key -> [[row, col], ...] for a grid of rows. */
+  function pinCells(rows) {
+    const out = {};
+    rows.forEach((r, ri) => r.forEach((k, ci) => { if (k !== "") (out[k] = out[k] || []).push([ri, ci]); }));
+    return out;
+  }
+  /** Where focus ends after the reset presses: the corner the reset directions point at (clamped grid). */
+  function pinResetCell(pp) {
+    let [r, c] = pinCells(pp.rows)[pp.start][0], right = false;
+    for (const d of pp.reset) {
+      if (d === "up") r = 0; else if (d === "down") r = pp.rows.length - 1;
+      else if (d === "left") { c = 0; right = false; } else right = true;
+    }
+    return [r, right ? pp.rows[r].length - 1 : Math.min(c, pp.rows[r].length - 1)];
+  }
+  /** Shortest d-pad path [dir, ...] from cell `from` to `key`, over single-cell keys only; null if unreachable. */
+  function pinPath(rows, from, key) {
+    const cells = pinCells(rows), goal = cells[key];
+    if (!goal || goal.length !== 1) return null;
+    const ok = (r, c) => r >= 0 && r < rows.length && c >= 0 && c < rows[r].length && rows[r][c] !== "" && cells[rows[r][c]].length === 1;
+    const id = (r, c) => r + "," + c;
+    const seen = new Map([[id(from[0], from[1]), []]]);
+    const q = [from];
+    while (q.length) {
+      const [r, c] = q.shift(), path = seen.get(id(r, c));
+      if (r === goal[0][0] && c === goal[0][1]) return path;
+      for (const [d, [dr, dc]] of Object.entries(PIN_DIRS)) {
+        const nr = r + dr, nc = c + dc;
+        if (!ok(nr, nc) || seen.has(id(nr, nc))) continue;
+        seen.set(id(nr, nc), [...path, d]); q.push([nr, nc]);
+      }
+    }
+    return null;
+  }
+  /** Logical keys that enter `digits` on the grid: reset presses, then for each digit its path + select. */
+  function pinSequence(pp, digits) {
+    const out = [];
+    for (const d of pp.reset) {
+      const n = d === "up" || d === "down" ? pp.rows.length - 1 : Math.max(...pp.rows.map((r) => r.length)) - 1;
+      for (let k = 0; k < n; k++) out.push(d);
+    }
+    let pos = pp.reset.length ? pinResetCell(pp) : pinCells(pp.rows)[pp.start][0];
+    for (const ch of String(digits)) {
+      const path = pinPath(pp.rows, pos, ch);
+      if (!path) throw new Error(`glass-remote-card: can't reach "${ch}" on the PIN grid`);
+      out.push(...path, pp.select);
+      pos = pinCells(pp.rows)[ch][0];
+    }
+    return out;
+  }
+  /** Service steps for a key sequence. Plain remote.send_command presses to one remote become one call with a
+   *  command list and delay_secs (the integration spaces them); anything else gets waits between the steps. */
+  function pinSteps(p, seq, states, delay = 0.3) {
+    const per = seq.map((k) => stepsFor(p, k, states || {}));
+    const flat = per.map((s) => (s.length === 1 ? s[0] : null));
+    const plain = flat.every((s) => s && s[0] === "remote" && s[1] === "send_command" && typeof s[2].command === "string" &&
+      s[2].entity_id === flat[0][2].entity_id && Object.keys(s[2]).every((k) => k === "entity_id" || k === "command"));
+    if (plain && flat.length) return [["remote", "send_command", { entity_id: flat[0][2].entity_id, command: flat.map((s) => s[2].command), delay_secs: delay }]];
+    const out = [];
+    per.forEach((s, i) => { if (i && delay) out.push(["wait", Math.round(delay * 1000)]); out.push(...s); });
+    return out;
+  }
 
   // ---------------------------------------------------------------------------
   // Kodi keyboard detection: poll GUI.GetProperties(currentwindow) and read the
@@ -895,9 +1029,19 @@
       color: #fff; background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.08); box-shadow: inset 0 1px 2px rgba(0,0,0,.35); outline: none;
       caret-color: #fff; user-select: text; -webkit-user-select: text; }
     .kb textarea::placeholder { color: rgba(235,235,245,.38); }
-    .kb .row { display: flex; gap: 10px; margin-top: 12px; }
-    .kb .row button { flex: 1 1 0; height: 46px; border-radius: 23px; font-size: 16px; font-weight: 600; color: #fff; }
-    .kb .row .send { background: rgba(255,255,255,.88); color: #000; border-color: rgba(255,255,255,.5); }
+    .kb .row, .pin .row { display: flex; gap: 10px; margin-top: 12px; }
+    .kb .row button, .pin .row button { flex: 1 1 0; height: 46px; border-radius: 23px; font-size: 16px; font-weight: 600; color: #fff; }
+    .kb .row .send, .pin .row .send { background: rgba(255,255,255,.88); color: #000; border-color: rgba(255,255,255,.5); }
+    /* PIN pad, 0.2.5 (Grok Bot, 15 Oct 2026): same sheet and header as the typing sheet; dots for the typed digits
+       (never the digits themselves) and a phone-style 3x4 keypad of glass circles */
+    .pin-dots { display: flex; justify-content: center; gap: 16px; padding: 4px 0 18px; }
+    .pin-dots i { width: 13px; height: 13px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,.7); transition: background .12s; }
+    .pin-dots i.on { background: #fff; border-color: #fff; }
+    .pin-keys { display: grid; grid-template-columns: repeat(3, 72px); justify-content: center; gap: 12px 24px; }
+    .pin-keys button { width: 72px; height: 72px; border-radius: 50%; display: grid; place-items: center; font-size: 30px; font-weight: 400; color: #fff; --s: 28px; }
+    .pin-keys .pin-del { opacity: .85; }
+    .pin-keys .pin-del:active { opacity: .5; }
+    .pin .row { margin-top: 16px; }
   `;
 
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -1167,7 +1311,14 @@
             <span class="kb-txt"><span class="kb-title">Type</span><span class="kb-sub">Keyboard Input</span></span>
             <button class="kb-x glass" data-act="close" aria-label="Close">${icon("close")}</button></div>
           <textarea rows="2" placeholder="Type or dictate" aria-label="Text to send" autocapitalize="off" autocomplete="off" enterkeyhint="send"></textarea>
-          <div class="row"><button class="glass" data-act="kb-clear">Clear</button><button class="glass send" data-act="kb-send">Send</button></div></div></div>`;
+          <div class="row"><button class="glass" data-act="kb-clear">Clear</button><button class="glass send" data-act="kb-send">Send</button></div></div></div>
+        <div class="sheet-bg pin"><div class="sheet" role="dialog" aria-label="PIN pad"><!-- 0.2.5 (Grok Bot, 15 Oct 2026) -->
+          <div class="kb-head"><span class="appicon">${REMOTE_GLYPH}</span>
+            <span class="kb-txt"><span class="kb-title pin-title">PIN Pad</span><span class="kb-sub pin-sub"></span></span>
+            <button class="kb-x glass" data-act="close" aria-label="Close">${icon("close")}</button></div>
+          <div class="pin-dots" aria-live="polite"></div>
+          <div class="pin-keys">${["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => `<button class="glass" data-pin="${d}">${d}</button>`).join("")}<span></span><button class="glass" data-pin="0">0</button><button class="pin-del" data-pin="del" aria-label="Delete">${icon("backspace")}</button></div>
+          <div class="row"><button class="glass" data-act="pin-clear">Clear</button><button class="glass send" data-act="pin-send">Send</button></div></div></div>`;
       this._wire();
       this._built = true;
     }
@@ -1209,6 +1360,12 @@
       });
       ta.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); this._act("kb-send"); } });
       this._wirePad(r.querySelector(".pad"));
+      r.querySelectorAll("[data-pin]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); this._pinKey(b.dataset.pin); })); // 0.2.5
+      r.querySelector(".pin .sheet").addEventListener("keydown", (e) => { // 0.2.5: digits / Backspace / Enter from a hardware keyboard
+        if (/^[0-9]$/.test(e.key)) { e.preventDefault(); this._pinKey(e.key); }
+        else if (e.key === "Backspace") { e.preventDefault(); this._pinKey("del"); }
+        else if (e.key === "Enter") { e.preventDefault(); this._act("pin-send"); }
+      });
       // CH chevrons: each use restarts the fold-back timer (0.1.4, Grok Bot 11 Oct 2026)
       r.querySelectorAll(".ch .chb").forEach((b) => b.addEventListener("pointerdown", () => { if (this._chOpen) this._setChOpen(true); }));
       // speaker badge: press and hold = sound mode menu (the +/- tabs keep hold-to-repeat)
@@ -1246,7 +1403,8 @@
         const sc = shortcutsFor(p).map((s) => ({ name: s.name, icon: s.icon, shortcut: true, run: () => this.runShortcut(p, s) }));
         const items = moreItems(p, st).map((it, i) => ({
           name: it.name, icon: it.icon, grp: i === 0 && sc.length > 0,
-          run: it.open ? () => this._openMenu(it.open, this.shadowRoot.querySelector(".more")) : () => this._call(it.steps),
+          run: it.open ? () => this._openMenu(it.open, this.shadowRoot.querySelector(".more"))
+            : it.pin ? () => this._openPin(p) : () => this._call(it.steps), // 0.2.5: PIN Pad sheet
         }));
         if (!sc.length && !items.length) return null;
         return { title: null, items: [...sc, ...items] };
@@ -1415,11 +1573,59 @@
         else if (id !== "auto") this._pickInputs(id, false);
         this._update();
       }
+      else if (act === "pin-clear") { if (this._pin) { this._pin.digits = ""; this._pinRender(); } }
+      else if (act === "pin-send") this._pinSubmit();
       else if (act === "exit") {
         this._closeSheets();
         history.pushState(null, "", this._config.exit_path);
         window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
       }
+    }
+    // ---- PIN pad (0.2.5, Grok Bot 15 Oct 2026) ------------------------------------
+    /** Open the PIN sheet for player p. Nothing is sent until the code is complete (or Send). */
+    _openPin(p) {
+      if (!p || !p.pin_pad) return;
+      const r = this.shadowRoot;
+      this._closeSheets();
+      this._pin = { entity: p.entity, digits: "", t: null };
+      r.querySelector(".pin-title").textContent = p.pin_pad.name;
+      r.querySelector(".pin-sub").textContent = this._friendly(p);
+      this._pinRender();
+      r.querySelector(".pin").classList.add("show");
+      const first = r.querySelector('.pin [data-pin="1"]'); if (first && first.focus) first.focus();
+    }
+    _pinPlayer() { return this._pin && this._config.players.find((x) => x.entity === this._pin.entity); }
+    _pinRender() {
+      const p = this._pinPlayer(); if (!p) return;
+      const n = this._pin.digits.length, len = p.pin_pad.length;
+      const dots = () => Array.from({ length: Math.max(len || 4, n) }, (_, i) => `<i class="${i < n ? "on" : ""}"></i>`).join("");
+      const box = this.shadowRoot.querySelector(".pin-dots");
+      box.innerHTML = dots(); box.setAttribute("aria-label", `${n} of ${len || n} digits`);
+    }
+    _pinKey(k) {
+      const p = this._pinPlayer(); if (!p || this._pin.t) return; // ignore keys while the auto-send is pending
+      const len = p.pin_pad.length;
+      this._haptic();
+      if (k === "del") this._pin.digits = this._pin.digits.slice(0, -1);
+      else if (/^[0-9]$/.test(k) && (!len || this._pin.digits.length < len) && this._pin.digits.length < 12) this._pin.digits += k;
+      this._pinRender();
+      if (len && this._pin.digits.length === len) { // let the last dot show, then send
+        const pin = this._pin;
+        pin.t = setTimeout(() => { this._timers.delete(pin.t); pin.t = null; if (this._pin === pin) this._pinSubmit(); }, 180);
+        this._timers.add(pin.t);
+      }
+    }
+    _pinSubmit() {
+      const p = this._pinPlayer(); if (!p) return;
+      const digits = this._pin.digits;
+      if (!digits) { this._toast("Type the code first"); return; }
+      let steps;
+      try { steps = pinSteps(p, pinSequence(p.pin_pad, digits), this._states, p.pin_pad.delay); }
+      catch (e) { this._toast(String(e.message || e).replace(/^glass-remote-card: /, "")); return; }
+      this._closeSheets();
+      this._haptic("medium");
+      this._toast(`Entering the code on ${this._friendly(p)}`, 2500);
+      return this._call(steps);
     }
     /** Switch the room's AVR/TV to `entity`'s input (inputs with triggers: [pick]). auto = Auto chose it. */
     _pickInputs(entity, auto) {
@@ -1444,6 +1650,7 @@
     _closeSheets() {
       const r = this.shadowRoot;
       r.querySelectorAll(".sheet-bg, .dd-bg").forEach((s) => s.classList.remove("show")); this._kbSheetFor = null; this._kbSearch = null;
+      if (this._pin) { clearTimeout(this._pin.t); this._pin = null; } // 0.2.5
       const pill = r.querySelector(".pill"); if (pill) { pill.classList.remove("open"); pill.setAttribute("aria-expanded", "false"); }
       const top = r.querySelector(".top"); if (top) top.classList.remove("dd-open"); // 0.1.11
     }
@@ -1566,7 +1773,7 @@
 
   // Exposed for tests and power users.
   GlassRemoteCard.VERSION = VERSION;
-  GlassRemoteCard.helpers = { kbFocus, kbPollInterval, kodiKeyboardFromEvent, sourceMenu, soundModeMenu, optionSteps, moreItems, hasChannels, hasInfoButton, bannerText, normaliseShortcuts, shortcutSteps, fillText, normaliseConfig, inputSteps, choosePlayer, volumeTarget, nowPlaying, stepsFor, swipeDirection, guessPlatform, PLATFORMS, ICONS };
+  GlassRemoteCard.helpers = { normalisePinPad, pinPath, pinSequence, pinSteps, kbFocus, kbPollInterval, kodiKeyboardFromEvent, sourceMenu, soundModeMenu, optionSteps, moreItems, hasChannels, hasInfoButton, bannerText, normaliseShortcuts, shortcutSteps, fillText, normaliseConfig, inputSteps, choosePlayer, volumeTarget, nowPlaying, stepsFor, swipeDirection, guessPlatform, PLATFORMS, ICONS };
 
   if (!customElements.get(TAG)) customElements.define(TAG, GlassRemoteCard);
   window.customCards = window.customCards || [];

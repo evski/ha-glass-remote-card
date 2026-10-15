@@ -928,6 +928,114 @@ function ptr(w, el, type, x = 100, y = 100) {
       !H.hasInfoButton({ entity: "media_player.g", platform: "generic" }, {}));
   }
 
+  // ---- PP: PIN pad for in-app code grids (0.2.5, Grok Bot 15 Oct 2026) ---------------------------------
+  // Evan: YouTube's "Enter parent code" screen is its own number grid (1-9, then 0 + a wide backspace, focus on 1),
+  // so no keyboard comes up and the touchpad is tedious. More > PIN Pad walks the grid with the d-pad.
+  {
+    const G = [["1", "2", "3"], ["4", "5", "6"], ["7", "8", "9"], ["0", "del", "del"]];
+    // Simulate a clamped TV grid: a move off the edge or onto an empty cell does nothing; a wide key is one key
+    // (from it, up lands on the column we came in on, so try every column it covers).
+    const simulate = (rows, start, seq, select = "select") => {
+      let [r, c] = start; const got = [];
+      for (const k of seq) {
+        if (k === select) { got.push(rows[r][c]); continue; }
+        const [dr, dc] = { up: [-1, 0], down: [1, 0], left: [0, -1], right: [0, 1] }[k];
+        let nr = r + dr, nc = c + dc;
+        if (rows[r][c] !== "" && dc) { // moving sideways off a wide key: from its end cell
+          let e = c; while (rows[r][e + dc] === rows[r][c]) e += dc; nc = e + dc;
+        }
+        if (nr < 0 || nr >= rows.length || nc < 0 || nc >= rows[nr].length || rows[nr][nc] === "") continue;
+        r = nr; c = nc;
+      }
+      return got;
+    };
+    const cellsOf = (rows) => rows.flatMap((row, r) => row.map((k, c) => [r, c]).filter(([rr, cc]) => rows[rr][cc] !== ""));
+    const N = (pp, platform = "apple_tv", extra = {}) => H.normaliseConfig({ players: [{ entity: "media_player.x", platform, remote: "remote.x", pin_pad: pp, ...extra }] }).players[0];
+    const atv = N(undefined);
+    check("PP1 pin_pad on by default for Apple TV players (YouTube grid, 4 digits, reset up+right, 0.3 s)",
+      eq(atv.pin_pad.rows, G) && atv.pin_pad.length === 4 && eq(atv.pin_pad.reset, ["up", "right"]) && atv.pin_pad.delay === 0.3 && atv.pin_pad.name === "PIN Pad");
+    check("PP2 off by default elsewhere; pin_pad: false / enabled: false hide it; true turns it on for webOS",
+      N(undefined, "kodi").pin_pad === null && N(undefined, "webostv").pin_pad === null && N(false).pin_pad === null &&
+      N({ enabled: false }).pin_pad === null && eq(N(true, "webostv").pin_pad.rows, G));
+    check("PP3 pinPath: 1->5 = down,right; 1->0 = down x3; 0->9 goes up first (never over the wide key)",
+      eq(H.pinPath(G, [0, 0], "5").length, 2) && eq(H.pinPath(G, [0, 0], "0"), ["down", "down", "down"]) && eq(H.pinPath(G, [3, 0], "9"), ["up", "right", "right"]));
+    check("PP4 pinPath: 3->0 is 5 moves and avoids the backspace", (() => { const pth = H.pinPath(G, [0, 2], "0"); return pth.length === 5 && eq(simulate(G, [0, 2], [...pth, "select"]), ["0"]); })());
+    const seq = H.pinSequence(atv.pin_pad, "1234");
+    check("PP5 pinSequence 1234: up x3 + right x2 reset, then the paths with a select per digit",
+      eq(seq.slice(0, 5), ["up", "up", "up", "right", "right"]) && eq(seq.slice(5, 8), ["left", "left", "select"]) && seq.filter((k) => k === "select").length === 4, seq);
+    // from ANY focused key (backspace included, both of its columns) the code lands right
+    const codes = ["1234", "0000", "9876", "5050", "2580", "1111", "0909", "7310"];
+    const allOk = codes.every((code) => { const s = H.pinSequence(atv.pin_pad, code); return cellsOf(G).every((st) => eq(simulate(G, st, s).join(""), code)); });
+    check("PP6 simulated on a clamped grid: every code correct from every starting focus", allOk);
+    const noReset = N({ reset: false });
+    check("PP7 reset: false starts at `start` (1): 1234 = select, right select, right select, ... no reset presses",
+      eq(H.pinSequence(noReset.pin_pad, "12").slice(0, 3), ["select", "right", "select"]) && eq(simulate(G, [0, 0], H.pinSequence(noReset.pin_pad, "4590")).join(""), "4590"));
+    const phone = N({ rows: [[1, 2, 3], [4, 5, 6], [7, 8, 9], [null, 0, null]], reset: ["up", "left"], length: 6 });
+    check("PP8 custom grid (0 under 8, gaps), reset up+left, 6 digits: correct from every start",
+      phone.pin_pad.length === 6 && ["258000", "147369", "000000"].every((code) => cellsOf(phone.pin_pad.rows).every((st) => eq(simulate(phone.pin_pad.rows, st, H.pinSequence(phone.pin_pad, code)).join(""), code))));
+    const st1 = H.pinSteps(atv, H.pinSequence(atv.pin_pad, "1234"), {}, 0.3);
+    check("PP9 Apple TV: ONE remote.send_command with the whole command list and delay_secs 0.3",
+      st1.length === 1 && st1[0][0] === "remote" && st1[0][1] === "send_command" && st1[0][2].entity_id === "remote.x" &&
+      eq(st1[0][2].command, H.pinSequence(atv.pin_pad, "1234")) && st1[0][2].delay_secs === 0.3, st1);
+    const lgp = N(true, "webostv", { remote: undefined });
+    const st2 = H.pinSteps(lgp, ["down", "select"], {}, 0.3);
+    check("PP10 webOS: its own button calls with 300 ms waits between",
+      eq(st2, [["webostv", "button", { entity_id: "media_player.x", button: "DOWN" }], ["wait", 300], ["webostv", "button", { entity_id: "media_player.x", button: "ENTER" }]]), st2);
+    const bad2 = (pp, platform = "apple_tv", extra = {}) => { try { N(pp, platform, extra); return false; } catch (_) { return true; } };
+    check("PP11 validation: missing digit, digit twice, wide reset corner, bad start/reset/length/delay, generic without d-pad",
+      bad2({ rows: [[1, 2, 3], [4, 5, 6], [7, 8, 9]] }) && bad2({ rows: [[1, 2, 3], [4, 5, 6], [7, 8, 9], [0, 0, "x"]] }) &&
+      bad2({ reset: ["down", "right"] }) && bad2({ start: "del" }) && bad2({ reset: ["sideways"] }) && bad2({ length: -1 }) &&
+      bad2({ delay: "fast" }) && bad2("yes") && bad2(true, "generic", { remote: undefined }) && !bad2({ reset: ["down", "left"] }));
+
+    // DOM: More > PIN Pad on the Apple TV, type 4 digits -> one send_command, nothing sent before that
+    w.localStorage.clear();
+    const atvActive = () => states({ "media_player.kodi": { state: "idle" }, "media_player.lr_tv": { attributes: { source: "Apple TV" } } });
+    let f = mount(w, CONFIG(), atvActive());
+    check("PP12 Apple TV active", f.card.activeEntity === "media_player.lr_appletv");
+    f.$(".more").click(); await sleep(10);
+    let rows = [...f.card.shadowRoot.querySelectorAll(".menu .mi")];
+    check("PP13 More menu ends with PIN Pad", rows.length > 1 && rows[rows.length - 1].querySelector(".nm").textContent === "PIN Pad", rows.map((b) => b.textContent));
+    f.hass.calls.length = 0;
+    rows[rows.length - 1].click(); await sleep(10);
+    const dotsOn = () => f.card.shadowRoot.querySelectorAll(".pin-dots i.on").length;
+    check("PP14 PIN sheet open: title, player name, 4 empty dots, nothing sent",
+      f.$(".pin").classList.contains("show") && f.$(".pin-title").textContent === "PIN Pad" && f.$(".pin-sub").textContent === "Living Room Apple TV" &&
+      f.card.shadowRoot.querySelectorAll(".pin-dots i").length === 4 && dotsOn() === 0 && f.hass.calls.length === 0);
+    const tap = (k) => f.$(`.pin [data-pin="${k}"]`).click();
+    tap("1"); tap("2"); tap("9"); await sleep(10);
+    check("PP15 three digits = three dots, still nothing sent; digits never shown", dotsOn() === 3 && f.hass.calls.length === 0 && !/129/.test(f.$(".pin").textContent));
+    tap("del"); await sleep(10);
+    check("PP16 backspace removes one", dotsOn() === 2 && f.hass.calls.length === 0);
+    tap("3"); tap("4"); await sleep(300);
+    check("PP17 4th digit -> sheet closes, ONE remote.send_command to remote.lr_appletv with the 1234 sequence",
+      !f.$(".pin").classList.contains("show") && f.hass.calls.length === 1 && f.hass.calls[0][0] === "remote" && f.hass.calls[0][2].entity_id === "remote.lr_appletv" &&
+      eq(f.hass.calls[0][2].command, H.pinSequence(f.card.activePlayer.pin_pad, "1234")) && f.hass.calls[0][2].delay_secs === 0.3, f.hass.calls);
+    f.card.remove(); w.localStorage.clear();
+    // length: 0 -> only the Send button sends; empty Send does nothing
+    const cfg0 = CONFIG(); cfg0.players[0].pin_pad = { length: 0 };
+    f = mount(w, cfg0, atvActive());
+    f.$(".more").click(); await sleep(10);
+    rows = [...f.card.shadowRoot.querySelectorAll(".menu .mi")]; rows[rows.length - 1].click(); await sleep(10);
+    f.hass.calls.length = 0;
+    f.$('[data-act="pin-send"]').click(); await sleep(10);
+    check("PP18 Send with no digits: nothing sent, sheet stays", f.hass.calls.length === 0 && f.$(".pin").classList.contains("show"));
+    ["5", "5", "5", "5", "5", "5"].forEach(tap); await sleep(300);
+    check("PP19 length 0: six digits, no auto-send", f.hass.calls.length === 0 && dotsOn() === 6);
+    f.$('[data-act="pin-send"]').click(); await sleep(10);
+    check("PP20 Send -> one call, six selects", f.hass.calls.length === 1 && f.hass.calls[0][2].command.filter((c) => c === "select").length === 6);
+    f.card.remove(); w.localStorage.clear();
+    // Kodi (no pin_pad) has no PIN Pad; pin_pad: false on the Apple TV hides it
+    f = mount(w, CONFIG(), states());
+    f.$(".more").click(); await sleep(10);
+    check("PP21 Kodi More menu has no PIN Pad", ![...f.card.shadowRoot.querySelectorAll(".menu .mi .nm")].some((n) => n.textContent === "PIN Pad"));
+    f.card.remove(); w.localStorage.clear();
+    const cfgF = CONFIG(); cfgF.players[0].pin_pad = false;
+    f = mount(w, cfgF, atvActive());
+    f.$(".more").click(); await sleep(10);
+    check("PP22 pin_pad: false -> no PIN Pad on the Apple TV", ![...f.card.shadowRoot.querySelectorAll(".menu .mi .nm")].some((n) => n.textContent === "PIN Pad"));
+    f.card.remove(); w.localStorage.clear();
+  }
+
   // URL pick (Sidebar Mini Player remote_path: /remote?player={entity})
   w.localStorage.clear();
   w.history.pushState(null, "", "/remote?player=media_player.bed_appletv");
