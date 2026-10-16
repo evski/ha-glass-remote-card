@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.7] - 2026-10-16
+
+### Fixed
+- PIN Pad was missing on YouTube's parent code screen because the Apple TV reported no app there (`app_id`, `app_name` and `source` all empty). `apps` now only hides PIN Pad when the player reports a different app. With no app info it's shown, and the code is sent. The send-time check uses the same rule.
+
+### Added
+- **`pin_pad.require_app`** (default `false`): `true` brings back the strict 0.2.6 rule, so PIN Pad is hidden and nothing is sent unless the player reports a matching app.
+
 ## [0.2.6] - 2026-10-15
 
 ### Added
@@ -219,6 +227,7 @@ Not affiliated with or endorsed by Apple Inc. Apple TV is a trademark of Apple I
 - Text: keyboard and dictation text box, and the automatic "wants text" bar.
 - Look and feel: frosted glass styling, thin line icons, haptics.
 
+[0.2.7]: https://github.com/evski/ha-glass-remote-card/releases/tag/v0.2.7
 [0.2.6]: https://github.com/evski/ha-glass-remote-card/releases/tag/v0.2.6
 [0.2.5]: https://github.com/evski/ha-glass-remote-card/releases/tag/v0.2.5
 [0.2.4]: https://github.com/evski/ha-glass-remote-card/releases/tag/v0.2.4

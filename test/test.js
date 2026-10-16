@@ -1042,7 +1042,19 @@ function ptr(w, el, type, x = 100, y = 100) {
     check("PP24 pinAppOk: app_id (full or its last dotted part), app_name (any case) or source matches; other app / off / no state don't; [] = always",
       H.pinAppOk(yt, { state: "playing", attributes: { app_id: "com.google.tv.youtube" } }) && H.pinAppOk(N({ apps: ["com.example.Code"] }).pin_pad, { attributes: { app_id: "com.example.code" } }) && !H.pinAppOk(yt, { attributes: { app_id: "com.youtube.kids" } }) && H.pinAppOk(yt, { state: "idle", attributes: { app_name: "youtube" } }) &&
       H.pinAppOk(yt, { state: "on", attributes: { source: "YouTube" } }) && !H.pinAppOk(yt, { state: "idle", attributes: { app_id: "com.netflix.Netflix", app_name: "Netflix" } }) &&
-      !H.pinAppOk(yt, { state: "off", attributes: {} }) && !H.pinAppOk(yt, undefined) && H.pinAppOk(N({ apps: [] }).pin_pad, undefined));
+      H.pinAppOk(N({ apps: [] }).pin_pad, undefined));
+    // 0.2.7 (Grok Bot, 16 Oct 2026): regression - Evan saw no PIN Pad on YouTube's parent-code screen because the Apple TV
+    // reported app_id / app_name / source all None there. Unknown app = allowed; require_app: true = strict.
+    const strict = N({ require_app: true }).pin_pad;
+    const none = { state: "idle", attributes: { app_id: null, app_name: null, source: null } };
+    check("PP30 no app info (all None, empty strings, no attributes, no state) -> allowed by default; require_app defaults false",
+      yt.require_app === false && H.pinAppOk(yt, none) && H.pinAppOk(yt, { state: "idle", attributes: { app_id: "", app_name: "" } }) &&
+      H.pinAppOk(yt, { state: "off", attributes: {} }) && H.pinAppOk(yt, undefined));
+    check("PP31 a known other app still hides it; a match still shows it",
+      !H.pinAppOk(yt, { state: "idle", attributes: { app_name: "Netflix" } }) && !H.pinAppOk(yt, { state: "idle", attributes: { app_id: "com.netflix.Netflix" } }) &&
+      H.pinAppOk(yt, { state: "idle", attributes: { app_name: "YouTube" } }));
+    check("PP32 require_app: true = strict (no app info -> not allowed; match -> allowed); must be boolean",
+      !H.pinAppOk(strict, none) && !H.pinAppOk(strict, undefined) && H.pinAppOk(strict, { state: "idle", attributes: { app_name: "YouTube" } }) && bad2({ require_app: "yes" }));
     {
       const inApp = (app_id, app_name) => states({ "media_player.kodi": { state: "idle" }, "media_player.lr_tv": { attributes: { source: "Apple TV" } },
         "media_player.lr_appletv": { attributes: { app_id, app_name } } });
@@ -1065,6 +1077,36 @@ function ptr(w, el, type, x = 100, y = 100) {
         moved.calls.length === 0 && g.hass.calls.length === 0 && !g.$(".pin").classList.contains("show") && /Not sent: .*isn't in YouTube/.test(g.$(".toast").textContent), [moved.calls, g.$(".toast").textContent]);
       g.$(".more").click(); await sleep(10);
       check("PP28 ...and More no longer offers it", !hasPin(g));
+      g.card.remove(); w.localStorage.clear();
+      // 0.2.7: Evan's live state on the PIN screen (no app info) -> PIN Pad offered and the code is sent
+      g = mount(w, CONFIG(), inApp(null, null));
+      g.$(".more").click(); await sleep(10);
+      check("PP33 Apple TV with no app info: PIN Pad in More", g.card.activeEntity === "media_player.lr_appletv" && hasPin(g));
+      rs = [...g.card.shadowRoot.querySelectorAll(".menu .mi")]; rs[rs.length - 1].click(); await sleep(10);
+      g.hass.calls.length = 0;
+      ["1", "2", "3", "4"].forEach((k) => g.$(`.pin [data-pin="${k}"]`).click()); await sleep(300);
+      check("PP34 ...and the code is sent (one remote.send_command)", g.hass.calls.length === 1 && g.hass.calls[0][1] === "send_command", g.hass.calls);
+      g.card.remove(); w.localStorage.clear();
+      const cfgS = CONFIG(); cfgS.players[0].pin_pad = { require_app: true };
+      g = mount(w, cfgS, inApp(null, null));
+      g.$(".more").click(); await sleep(10);
+      check("PP35 require_app: true + no app info: no PIN Pad", !hasPin(g));
+      g.card.remove(); w.localStorage.clear();
+      // send-time guard with require_app: sheet opened in YouTube, then the app info disappears -> nothing sent
+      g = mount(w, cfgS, inApp("com.google.tv.youtube", "YouTube"));
+      g.$(".more").click(); await sleep(10);
+      rs = [...g.card.shadowRoot.querySelectorAll(".menu .mi")]; rs[rs.length - 1].click(); await sleep(10);
+      const gone = fakeHass(inApp(null, null)); g.card.hass = gone; await sleep(10);
+      ["1", "2", "3", "4"].forEach((k) => g.$(`.pin [data-pin="${k}"]`).click()); await sleep(300);
+      check("PP36 require_app: true, app info gone before send: nothing sent, toast", gone.calls.length === 0 && /Not sent/.test(g.$(".toast").textContent));
+      g.card.remove(); w.localStorage.clear();
+      // default rule at send: sheet opened in YouTube, app info goes empty -> still sent
+      g = mount(w, CONFIG(), inApp("com.google.tv.youtube", "YouTube"));
+      g.$(".more").click(); await sleep(10);
+      rs = [...g.card.shadowRoot.querySelectorAll(".menu .mi")]; rs[rs.length - 1].click(); await sleep(10);
+      const empty = fakeHass(inApp(null, null)); g.card.hass = empty; await sleep(10);
+      ["5", "6", "7", "8"].forEach((k) => g.$(`.pin [data-pin="${k}"]`).click()); await sleep(300);
+      check("PP37 default, app info goes empty before send: still sent", empty.calls.length === 1 && empty.calls[0][1] === "send_command", empty.calls);
       g.card.remove(); w.localStorage.clear();
       const cfgA = CONFIG(); cfgA.players[0].pin_pad = { apps: [] };
       g = mount(w, cfgA, inApp("com.netflix.Netflix", "Netflix"));

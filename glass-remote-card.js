@@ -68,6 +68,10 @@
  * 0.2.2 (Grok Bot, 11 Oct 2026): no duplicate Info. What: while a player shows the bottom-row Info button,
  * "info" is left out of that player's More menu (default or custom `more:` list). Players with CH (no Info
  * button) keep Info in More. Why: Evan: "Good we don't need info in the menu now then".
+ * 0.2.7 (Grok Bot, 16 Oct 2026): PIN Pad shows when the app is unknown. What: `apps` only hides it when the player
+ * reports an app (app_id / app_name / source) that isn't in the list; with no app info at all it is allowed, menu and
+ * send alike. pin_pad.require_app: true = the 0.2.6 strict rule (hidden without a matching app). Why: Evan didn't see
+ * PIN Pad on YouTube's parent-code screen; the Apple TV reported app_id/app_name/source all empty there.
  * 0.2.6 (Grok Bot, 15 Oct 2026): PIN Pad only in the app it's for. What: pin_pad.apps (app ids or names, matched
  * case-insensitively against the player's app_id, the app_id's last dotted part, app_name or source; default ["YouTube"]
  * for the built-in grid, which matches both the YouTube app's name and its id; [] or null = always). The More item only shows while the player is in one of them, and the send is checked again: if the
@@ -93,7 +97,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "0.2.6";
+  const VERSION = "0.2.7";
   const TAG = "glass-remote-card";
   const PICK_KEY = "glass-remote-card:pick:";
 
@@ -591,12 +595,14 @@
   //     delay: 0.3                   # seconds between presses
   //     apps: [YouTube]              # 0.2.6: only while the player's app_id (or its last dotted part), app_name or
   //                                  # source is one of these (default for the built-in grid; with your own rows the
-  //                                  # default is always). [] or null = always.
+  //                                  # default is always). [] or null = always. A player that reports no app at all
+  //                                  # (app_id, app_name and source empty) is allowed (0.2.7) unless:
+  //     require_app: false           # true = hide / don't send unless the app is reported and matches
   // Moves only pass over single-cell keys (a wide key's column is ambiguous) and never leave the grid.
   // ---------------------------------------------------------------------------
   const PIN_DIRS = { up: [-1, 0], down: [1, 0], left: [0, -1], right: [0, 1] };
   const PIN_DEFAULT = { name: "PIN Pad", rows: [["1", "2", "3"], ["4", "5", "6"], ["7", "8", "9"], ["0", "del", "del"]],
-    reset: ["up", "right"], start: "1", select: "select", length: 4, delay: 0.3, apps: ["YouTube"] };
+    reset: ["up", "right"], start: "1", select: "select", length: 4, delay: 0.3, apps: ["YouTube"], require_app: false };
   function normalisePinPad(raw, p, i) {
     const where = `glass-remote-card: players[${i}].pin_pad`;
     if (raw === false || (raw && typeof raw === "object" && raw.enabled === false)) return null;
@@ -612,6 +618,7 @@
     if (o.apps == null) o.apps = [];
     if (typeof o.apps === "string") o.apps = [o.apps];
     if (!Array.isArray(o.apps) || !o.apps.every((a) => typeof a === "string" && a)) throw new Error(`${where}.apps must be a list of app ids or names ([] = always)`);
+    if (typeof o.require_app !== "boolean") throw new Error(`${where}.require_app must be true or false`); // 0.2.7
     if (!Array.isArray(o.rows) || !o.rows.length || !o.rows.every((r) => Array.isArray(r) && r.length))
       throw new Error(`${where}.rows must be a list of rows, each a list of keys`);
     o.rows = o.rows.map((r) => r.map((k) => (k == null ? "" : String(k))));
@@ -638,13 +645,15 @@
     return o;
   }
   /** 0.2.6 (Grok Bot, 15 Oct 2026): true when the PIN pad may be used now: no `apps` list, or the player's
-   *  app_id, the app_id's last dotted part, app_name or source (case-insensitive) is in it. */
+   *  app_id, the app_id's last dotted part, app_name or source (case-insensitive) is in it.
+   *  0.2.7 (Grok Bot, 16 Oct 2026): no app info at all (all empty / no state) = allowed, unless require_app. */
   function pinAppOk(pp, st) {
     if (!pp) return false;
     if (!pp.apps || !pp.apps.length) return true;
     const a = (st && st.attributes) || {};
     const id = a.app_id != null ? String(a.app_id) : "";
     const now = [id, id.includes(".") ? id.split(".").pop() : "", a.app_name, a.source].filter((v) => v != null && v !== "").map((v) => String(v).toLowerCase());
+    if (!now.length) return !pp.require_app; // 0.2.7: unknown app is not a different app
     return pp.apps.some((x) => now.includes(String(x).toLowerCase()));
   }
   /** Short name of the app list for messages ("YouTube"): the first entry that isn't a dotted id. */

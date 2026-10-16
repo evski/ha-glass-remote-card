@@ -353,10 +353,11 @@ It's on for `apple_tv` players, set up for YouTube's grid (1 to 9 in three rows,
       select: select         # the key pressed on each digit
       length: 4              # sent as soon as this many digits are typed; 0 = only when you press Send
       delay: 0.3             # seconds between presses
-      apps: [YouTube]        # only offer it while the player is in one of these apps; [] = always
+      apps: [YouTube]        # hide it while the player is in a different app; [] = always
+      require_app: false     # true = also hide it when the player doesn't say which app is open
 ```
 
-**Only in the right app.** PIN Pad only appears in More while the player is in one of the `apps`: each entry is compared, ignoring case, with the player's `app_id`, the last part of the `app_id` after the final dot, its `app_name` and its `source`. With the built-in grid the default is `[YouTube]`, which matches the YouTube app by name and by id. With your own `rows` the default is `[]` (always shown). The app is checked again when the code is sent: if you've left the app while typing, nothing is sent and a short message says why.
+**Only in the right app.** PIN Pad only appears in More while the player is in one of the `apps`: each entry is compared, ignoring case, with the player's `app_id`, the last part of the `app_id` after the final dot, its `app_name` and its `source`. With the built-in grid the default is `[YouTube]`, which matches the YouTube app by name and by id. With your own `rows` the default is `[]` (always shown). If the player doesn't report an app at all (`app_id`, `app_name` and `source` all empty, which can happen on a code screen), PIN Pad is still shown; set `require_app: true` to hide it then too. The app is checked again, by the same rule, when the code is sent: if you've switched to another app while typing, nothing is sent and a short message says why.
 
 `pin_pad: false` hides it. On another player (`webostv`, `kodi`, or `generic` with a `remote`), `pin_pad: true` adds it with these defaults, and each press is a separate call with `delay` between them.
 
