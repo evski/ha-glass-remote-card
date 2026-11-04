@@ -1,6 +1,6 @@
 # Glass Remote Card
 
-[![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/docs/faq/custom_repositories)
+[![HACS Default](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://hacs.xyz/)
 [![GitHub release](https://img.shields.io/github/v/release/evski/ha-glass-remote-card)](https://github.com/evski/ha-glass-remote-card/releases)
 [![Tests](https://github.com/evski/ha-glass-remote-card/actions/workflows/test.yml/badge.svg)](https://github.com/evski/ha-glass-remote-card/actions/workflows/test.yml)
 [![HACS validation](https://github.com/evski/ha-glass-remote-card/actions/workflows/validate.yml/badge.svg)](https://github.com/evski/ha-glass-remote-card/actions/workflows/validate.yml)
@@ -67,8 +67,12 @@ Every button can be overridden per player with `actions:` (see below).
 
 ### HACS (recommended)
 
-1. HACS → ⋮ → **Custom repositories** → add `https://github.com/evski/ha-glass-remote-card` as **Dashboard**.
-2. Install **Glass Remote Card**, then reload the browser. In the companion app, use **Settings → Companion App → Debugging → Reset frontend cache**.
+Glass Remote Card is in the HACS default store.
+
+1. Open HACS and search for **Glass Remote Card**.
+2. Install it, then reload the browser. In the companion app, use **Settings → Companion App → Debugging → Reset frontend cache**.
+
+If it doesn't show up in the search yet, add it as a custom repository instead: HACS → ⋮ → **Custom repositories** → add `https://github.com/evski/ha-glass-remote-card` as **Dashboard**, then install as above.
 
 ### Manual
 
