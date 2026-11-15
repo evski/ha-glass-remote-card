@@ -58,7 +58,7 @@ One card drives Kodi, LG webOS TVs, devices from Home Assistant's Apple TV integ
 |---|---|---|---|---|---|---|
 | `apple_tv` | [Apple TV](https://www.home-assistant.io/integrations/apple_tv/) (`remote.*` + `media_player.*`) | `remote.send_command` | ±10 s (skip_backward/forward) | Opens the device's info panel | Live, via `apple_tv.set_keyboard_text` (needs `config_entry_id`) | Wake / sleep |
 | `kodi` | [Kodi](https://www.home-assistant.io/integrations/kodi/) | `kodi.call_method` Input.* | ±10 s (Player.Seek) | Input.Info / show subtitles (hold = next track) | `Input.SendText` on Enter | Kodi shutdown menu |
-| `webostv` | [LG webOS TV](https://www.home-assistant.io/integrations/webostv/) | `webostv.button` | Rewind / fast-forward | INFO / CC | Live, via the IME (`webostv.command`) | On / off |
+| `webostv` | [LG webOS TV](https://www.home-assistant.io/integrations/webostv/) | `webostv.button` | Rewind / fast-forward | INFO / CC | Live IME: new characters only, backspace deletes, Clear empties the field, Enter sends the enter key | On / off |
 | `generic` | Any `media_player` (and optional `remote.*`) | Via `remote` if you set one | Previous / next track | Via `remote` | Your own `actions.text` | On / off |
 
 Every button can be overridden per player with `actions:` (see below).
@@ -536,6 +536,7 @@ kiosk_mode:
 - **The phone's physical volume buttons can't be used.** The phone keeps them for its own volume, and a web page never sees them (see [Open it from your phone's control centre](#open-it-from-your-phones-control-centre)).
 - **A web page can't open the phone keyboard without a tap.** That's why the keyboard notification needs one tap.
 - **`apple_tv`: info and subtitles both open the device's info panel.** There are no separate keys for them.
+- **LG keyboard.** Text is sent as you type. Only the new characters go to the TV, backspace removes those characters, and Clear empties the text field. Enter presses the TV's enter key. The sheet starts empty: the first change after you open it makes the TV match the sheet. If the TV box already had text you want gone, tap Clear once before typing.
 - **LG rewind/fast-forward** change playback speed; they don't jump 10 seconds.
 - **The manual pick is stored per device** (local storage), not shared between phones.
 

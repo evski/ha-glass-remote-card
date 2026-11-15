@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.8] - 2026-11-15
+
+### Fixed
+- **LG webOS keyboard.** Typing sent the whole text box on every change (`com.webos.service.ime/insertText` with `replace: 1`). On many webOS fields that flag is not applied, so each update was appended and the text was duplicated. Clear sent an empty insert, which removed nothing. Typing now sends only the new characters, and backspace deletes just those characters (`deleteCharacters`). Clear empties the text field. Enter presses the TV's enter key after any change that has not been sent yet, and does not send the whole string again. Kodi and the other players are unchanged.
+
 ## [0.2.7] - 2026-10-16
 
 ### Fixed
@@ -227,6 +232,7 @@ Not affiliated with or endorsed by Apple Inc. Apple TV is a trademark of Apple I
 - Text: keyboard and dictation text box, and the automatic "wants text" bar.
 - Look and feel: frosted glass styling, thin line icons, haptics.
 
+[0.2.8]: https://github.com/evski/ha-glass-remote-card/releases/tag/v0.2.8
 [0.2.7]: https://github.com/evski/ha-glass-remote-card/releases/tag/v0.2.7
 [0.2.6]: https://github.com/evski/ha-glass-remote-card/releases/tag/v0.2.6
 [0.2.5]: https://github.com/evski/ha-glass-remote-card/releases/tag/v0.2.5

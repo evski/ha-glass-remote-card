@@ -68,6 +68,13 @@
  * 0.2.2 (Grok Bot, 11 Oct 2026): no duplicate Info. What: while a player shows the bottom-row Info button,
  * "info" is left out of that player's More menu (default or custom `more:` list). Players with CH (no Info
  * button) keep Info in More. Why: Evan: "Good we don't need info in the menu now then".
+ * 0.2.8 (Grok Bot, 15 Nov 2026): LG webOS keyboard sends one change at a time. What: the typing sheet
+ * used to send the whole box on every update with com.webos.service.ime/insertText and replace: 1, and
+ * Clear sent that call with an empty string. On many webOS fields that flag is not applied, so each update
+ * was appended (typed text duplicated) and an empty insert removed nothing. Typing now inserts only the new
+ * characters and deleteCharacters removes only what was deleted. Clear deletes the field. Enter sends the
+ * enter key after any unsent change, and does not send the string again. Kodi and the other platforms are
+ * unchanged. Why: Evan's LG keyboard was unusable, and Clear did not clear the TV.
  * 0.2.7 (Grok Bot, 16 Oct 2026): PIN Pad shows when the app is unknown. What: `apps` only hides it when the player
  * reports an app (app_id / app_name / source) that isn't in the list; with no app info at all it is allowed, menu and
  * send alike. pin_pad.require_app: true = the 0.2.6 strict rule (hidden without a matching app). Why: Evan didn't see
@@ -97,7 +104,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "0.2.7";
+  const VERSION = "0.2.8";
   const TAG = "glass-remote-card";
   const PICK_KEY = "glass-remote-card:pick:";
 
@@ -193,6 +200,32 @@
   const lg = (p, button) => ["webostv", "button", { entity_id: p.entity, button }];
   const isOff = (st) => !st || OFF_STATES.includes(st.state);
 
+  // LG webOS IME (0.2.8). insertText's replace flag is not applied on many text fields: sending the whole
+  // box each time appends it, and an empty insert does not clear. Send only the edit. deleteCharacters
+  // counts UTF-16 code units, the same length JavaScript (and the TV's Qt string) uses. Clear asks for at
+  // least LG_IME_CLEAR so a field that already had text is emptied, not only the characters we tracked.
+  const LG_IME_CLEAR = 1024;
+  function lgImeSteps(entity, prev, next, opts) {
+    opts = opts || {};
+    prev = String(prev == null ? "" : prev);
+    next = String(next == null ? "" : next);
+    const ime = (command, payload) => ["webostv", "command", payload
+      ? { entity_id: entity, command, payload }
+      : { entity_id: entity, command }];
+    const steps = [];
+    if (opts.clear) steps.push(ime("com.webos.service.ime/deleteCharacters", { count: Math.max(prev.length, LG_IME_CLEAR) }));
+    else {
+      let i = 0;
+      const n = Math.min(prev.length, next.length);
+      while (i < n && prev[i] === next[i]) i++;
+      const del = prev.length - i, add = next.slice(i);
+      if (del) steps.push(ime("com.webos.service.ime/deleteCharacters", { count: del }));
+      if (add) steps.push(ime("com.webos.service.ime/insertText", { text: add, replace: false }));
+    }
+    if (opts.enter && !opts.clear) steps.push(ime("com.webos.service.ime/sendEnterKey"));
+    return steps;
+  }
+
   const PLATFORMS = {
     apple_tv: {
       label: "Apple TV",
@@ -267,9 +300,9 @@
         channel_up: (p) => lg(p, "CHANNELUP"), channel_down: (p) => lg(p, "CHANNELDOWN"),
         settings: (p) => lg(p, "MENU"), exit: (p) => lg(p, "EXIT"),
       },
-      text: (p, text, done) => done
-        ? [["webostv", "command", { entity_id: p.entity, command: "com.webos.service.ime/sendEnterKey" }]]
-        : [["webostv", "command", { entity_id: p.entity, command: "com.webos.service.ime/insertText", payload: { text, replace: 1 } }]],
+      // Live edits go through lgImeSteps with the text already on the TV (see sendText). From empty, this
+      // is also what shows the keyboard button: a non-empty string is one insertText.
+      text: (p, text, done) => lgImeSteps(p.entity, "", text, { enter: !!done }),
       textLive: true,
       channels: true,
       more: ["info", "subtitles", "sound_mode", "settings", "exit"],
@@ -1213,14 +1246,16 @@
       // opts.quiet (0.1.8): ask HA not to show its own error toast (5th callService arg, notifyOnError) and hand errors to opts.onError
       const callSvc = (domain, service, data) => opts.quiet ? this._hass.callService(domain, service, data, undefined, false) : this._hass.callService(domain, service, data);
       const fail = (domain, service) => (e) => { console.warn(TAG, domain + "." + service, e); if (opts.onError) opts.onError(e); };
-      const hasWait = steps.some((s) => s[0] === "wait");
+      // opts.sequential (LG keyboard): a delete must finish before the insert that follows it, and the
+      // insert before Enter. A "wait" step already awaits each call for the same reason.
+      const sequential = !!opts.sequential || steps.some((s) => s[0] === "wait");
       const run = async () => {
         for (const [domain, service, data] of steps) {
           if (domain === "wait") { await new Promise((r) => { const t = setTimeout(() => { this._timers.delete(t); r(); }, service); this._timers.add(t); }); continue; }
           if (!domain || !service) continue;
           try {
             const r = callSvc(domain, service, data);
-            if (r && r.catch) { if (hasWait) await r.catch(fail(domain, service)); else r.catch(fail(domain, service)); }
+            if (r && r.catch) { if (sequential) await r.catch(fail(domain, service)); else r.catch(fail(domain, service)); }
           } catch (e) { fail(domain, service)(e); }
         }
       };
@@ -1239,12 +1274,21 @@
       this._switching = true;
       return this._call([...sw, ...keySteps]).finally(() => { this._switching = false; });
     }
-    sendText(text, done) {
+    sendText(text, done, clear) {
       const p = this.activePlayer; if (!p) return;
-      const steps = (p.actions && p.actions.text) ? stepsFor(p, "text", this._states, text) : PLATFORMS[p.platform].text(p, text, done);
+      const custom = !!(p.actions && p.actions.text);
+      let steps, sequential = false;
+      // 0.2.8: LG keeps the text it has already been sent and transmits only the difference. A custom
+      // actions.text still gets the whole string, as on every other platform.
+      if (!custom && p.platform === "webostv") {
+        const prev = this._lgIme && this._lgIme.entity === p.entity ? this._lgIme.text : "";
+        steps = lgImeSteps(p.entity, prev, text, { enter: !!done, clear: !!clear });
+        this._lgIme = { entity: p.entity, text: clear || done ? "" : String(text ?? "") };
+        sequential = true;
+      } else steps = custom ? stepsFor(p, "text", this._states, text) : PLATFORMS[p.platform].text(p, text, done);
       const sw = !this._controlOnly(p) && (done || PLATFORMS[p.platform].textLive) ? inputSteps(p, "text", this._states, false) : [];
       // 0.1.8: no HA toast per keystroke; one glass hint, and close the sheet if the player says nothing is focused
-      return this._call([...sw, ...steps], { quiet: true, onError: (e) => this._textError(p, e) });
+      return this._call([...sw, ...steps], { quiet: true, sequential, onError: (e) => this._textError(p, e) });
     }
     /** 0.2.0 (Grok Bot, 11 Oct 2026): run a shortcut of player p. Search shortcuts ask for text first (typing
      *  sheet in search mode); call shortcuts run now. Input switching runs first unless the shortcut says input: false. */
@@ -1494,6 +1538,10 @@
       const t = setTimeout(() => { this._timers.delete(t); fn(); }, ms);
       this._timers.add(t); this["_db_" + name] = t;
     }
+    /** Drop a typing-sheet live update that has not been sent yet (Clear or Enter). */
+    _cancelKb() {
+      clearTimeout(this._db_kb); this._timers.delete(this._db_kb); this._db_kb = null;
+    }
 
     _wireButton(b, key, repeat) {
       let holdT = null, repT = null, held = false;
@@ -1581,7 +1629,11 @@
         r.querySelector(".kb").classList.add("show");
         ta.focus(); // some mobile browsers only raise the keyboard if this runs inside the tap, which it does
       }
-      else if (act === "kb-clear") { const ta = r.querySelector(".kb textarea"); ta.value = ""; this._kbText = ""; if (!this._kbSearch) this.sendText("", false); ta.focus(); }
+      else if (act === "kb-clear") {
+        this._cancelKb(); // a pending live update would put the cleared text straight back
+        const ta = r.querySelector(".kb textarea"); ta.value = ""; this._kbText = "";
+        if (!this._kbSearch) this.sendText("", false, true); ta.focus();
+      }
       else if (act === "kb-send" && this._kbSearch) { // 0.2.0 (Grok Bot, 11 Oct 2026): run the search shortcut with the typed text
         const text = this._kbText.trim();
         if (!text) { this._toast("Type something to search for"); r.querySelector(".kb textarea").focus(); return; }
@@ -1592,9 +1644,10 @@
       }
       else if (act === "kb-send") {
         const p = this.activePlayer;
-        clearTimeout(this._db_kb); // no stale live update after Enter
-        if (p && (!PLATFORMS[p.platform].textLive || p.platform === "kodi")) this.sendText(this._kbText, true);
-        else if (p && p.platform === "webostv") { this.sendText(this._kbText, false); this.sendText(this._kbText, true); }
+        this._cancelKb(); // no stale live update after Enter
+        // webOS: one pass — any unsent change, then the enter key. Not a second copy of the whole box.
+        if (p && p.platform === "webostv") this.sendText(this._kbText, true);
+        else if (p && (!PLATFORMS[p.platform].textLive || p.platform === "kodi")) this.sendText(this._kbText, true);
         else this.sendText(this._kbText, false);
         this._closeSheets();
       }
@@ -1809,7 +1862,7 @@
 
   // Exposed for tests and power users.
   GlassRemoteCard.VERSION = VERSION;
-  GlassRemoteCard.helpers = { normalisePinPad, pinAppOk, pinPath, pinSequence, pinSteps, kbFocus, kbPollInterval, kodiKeyboardFromEvent, sourceMenu, soundModeMenu, optionSteps, moreItems, hasChannels, hasInfoButton, bannerText, normaliseShortcuts, shortcutSteps, fillText, normaliseConfig, inputSteps, choosePlayer, volumeTarget, nowPlaying, stepsFor, swipeDirection, guessPlatform, PLATFORMS, ICONS };
+  GlassRemoteCard.helpers = { normalisePinPad, pinAppOk, pinPath, pinSequence, pinSteps, kbFocus, kbPollInterval, kodiKeyboardFromEvent, lgImeSteps, LG_IME_CLEAR, sourceMenu, soundModeMenu, optionSteps, moreItems, hasChannels, hasInfoButton, bannerText, normaliseShortcuts, shortcutSteps, fillText, normaliseConfig, inputSteps, choosePlayer, volumeTarget, nowPlaying, stepsFor, swipeDirection, guessPlatform, PLATFORMS, ICONS };
 
   if (!customElements.get(TAG)) customElements.define(TAG, GlassRemoteCard);
   window.customCards = window.customCards || [];
