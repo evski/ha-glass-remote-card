@@ -1116,6 +1116,149 @@ function ptr(w, el, type, x = 100, y = 100) {
     }
   }
 
+  // ---- LGK: LG webOS keyboard sends one change at a time (0.2.8) ---------------------------------
+  // insertText with replace:1 was appended on every update, and Clear's empty insert removed nothing.
+  // Typing must send only the new characters; backspace deletes those; Clear empties the field.
+  // Kodi still sends the whole string (Input.SendText). A streaming box that replaces the field still
+  // gets the whole string (set_keyboard_text).
+  {
+    const ent = "media_player.lr_tv";
+    const ins = (text) => ["webostv", "command", { entity_id: ent, command: "com.webos.service.ime/insertText", payload: { text, replace: false } }];
+    const del = (count) => ["webostv", "command", { entity_id: ent, command: "com.webos.service.ime/deleteCharacters", payload: { count } }];
+    const enter = ["webostv", "command", { entity_id: ent, command: "com.webos.service.ime/sendEnterKey" }];
+    let prev = "";
+    const apply = (next, opts) => {
+      const steps = H.lgImeSteps(ent, prev, opts && opts.clear ? prev : next, opts);
+      prev = opts && (opts.clear || opts.enter) ? "" : next;
+      return steps;
+    };
+    check("LGK1 one new character at a time, never the whole string again",
+      eq(apply("h"), [ins("h")]) && eq(apply("he"), [ins("e")]) && eq(apply("hel"), [ins("l")]));
+    check("LGK2 backspace deletes only the removed character", eq(apply("he"), [del(1)]));
+    check("LGK3 backspace of several characters is one deleteCharacters", eq(apply("h"), [del(1)]) && eq(apply(""), [del(1)]));
+    check("LGK4 unchanged text sends nothing", eq(apply(""), []));
+    prev = "hello";
+    check("LGK5 edit in the middle deletes the old tail and inserts the new one", eq(apply("hXllo"), [del(4), ins("Xllo")]));
+    prev = "cat";
+    check("LGK6 a longer paste sends only the added tail", eq(apply("cats and dogs"), [ins("s and dogs")]));
+    check("LGK7 Clear deletes the field (at least the tracked text, and a full wipe from empty)",
+      (() => { prev = "hello"; const wiped = apply("", { clear: true }); const bare = H.lgImeSteps(ent, "", "", { clear: true });
+        return wiped.length === 1 && wiped[0][2].command.endsWith("deleteCharacters") && wiped[0][2].payload.count === Math.max("hello".length, H.LG_IME_CLEAR) &&
+          eq(bare, [del(H.LG_IME_CLEAR)]) && !JSON.stringify(wiped).includes("insertText"); })());
+    prev = "hello";
+    check("LGK8 Enter after a live update sends the enter key only, not the string again",
+      eq(apply("hello", { enter: true }), [enter]));
+    check("LGK9 Enter before the text has been sent inserts it once, then the enter key",
+      eq(H.lgImeSteps(ent, "", "hi", { enter: true }), [ins("hi"), enter]));
+    check("LGK10 an unsent extra character goes out before Enter, and only that character",
+      eq(H.lgImeSteps(ent, "hello", "hello!", { enter: true }), [ins("!"), enter]));
+    check("LGK11 keyboard button still has a text call (non-empty insert from an empty field)",
+      H.PLATFORMS.webostv.text({ entity: ent }, "x", false).length === 1 &&
+      H.PLATFORMS.webostv.text({ entity: ent }, "x", false)[0][2].payload.text === "x" &&
+      H.PLATFORMS.webostv.text({ entity: ent }, "x", false)[0][2].payload.replace === false);
+
+    const type = async (f, value) => {
+      const ta = f.$(".kb textarea"); ta.value = value; ta.dispatchEvent(new w.Event("input")); await sleep(400);
+    };
+    w.localStorage.clear();
+    let f = mount(w, { players: [{ entity: ent, platform: "webostv" }] }, states());
+    check("LGK12 LG is the player and the keyboard button is shown", f.card.activeEntity === ent && f.$(".kbd").style.display !== "none");
+    f.$(".kbd").click();
+    f.hass.calls.length = 0;
+    await type(f, "h"); await type(f, "he"); await type(f, "hel");
+    check("LGK13 typing h, he, hel sends h then e then l (not the whole box each time)",
+      eq(f.hass.calls, [ins("h"), ins("e"), ins("l")]), f.hass.calls);
+    f.hass.calls.length = 0;
+    await type(f, "he");
+    check("LGK14 backspace sends deleteCharacters 1 and no insert", eq(f.hass.calls, [del(1)]), f.hass.calls);
+    f.hass.calls.length = 0;
+    await type(f, "hello");
+    check("LGK15 the new tail is inserted on its own", eq(f.hass.calls, [ins("llo")]), f.hass.calls);
+    f.hass.calls.length = 0;
+    f.$('[data-act="kb-clear"]').click(); await sleep(30);
+    check("LGK16 Clear empties the sheet and deletes the TV field; nothing is inserted",
+      f.$(".kb textarea").value === "" && eq(f.hass.calls, [del(Math.max("hello".length, H.LG_IME_CLEAR))]), f.hass.calls);
+    f.hass.calls.length = 0;
+    await type(f, "z");
+    check("LGK17 typing after Clear inserts only that character", eq(f.hass.calls, [ins("z")]), f.hass.calls);
+    f.hass.calls.length = 0;
+    f.$('[data-act="kb-send"]').click(); await sleep(30);
+    check("LGK18 Send after a live update is the enter key only, and the sheet closes",
+      !f.$(".kb").classList.contains("show") && eq(f.hass.calls, [enter]), f.hass.calls);
+
+    // Clear before the debounced live update fires must not then insert the cleared text.
+    f.$(".kbd").click();
+    f.hass.calls.length = 0;
+    const ta = f.$(".kb textarea"); ta.value = "hello"; ta.dispatchEvent(new w.Event("input"));
+    f.$('[data-act="kb-clear"]').click(); await sleep(400);
+    check("LGK19 Clear cancels the pending live update (no insert of the cleared text)",
+      eq(f.hass.calls, [del(H.LG_IME_CLEAR)]) && f.$(".kb textarea").value === "", f.hass.calls);
+
+    // Enter before the debounce: the unsent text goes once, then Enter. Not twice.
+    f.hass.calls.length = 0;
+    ta.value = "go"; ta.dispatchEvent(new w.Event("input"));
+    f.$('[data-act="kb-send"]').click(); await sleep(400);
+    check("LGK20 Enter before the live update inserts the text once, then the enter key",
+      eq(f.hass.calls, [ins("go"), enter]), f.hass.calls);
+
+    // delete must finish before the insert that follows (middle-of-word edit).
+    f.$(".kbd").click();
+    await type(f, "ab");
+    const queued = [];
+    f.hass.callService = (d, s, data) => new Promise((resolve) => { f.hass.calls.push([d, s, data]); queued.push(resolve); });
+    f.hass.calls.length = 0;
+    ta.value = "aX"; ta.dispatchEvent(new w.Event("input")); await sleep(400);
+    check("LGK21 the delete is sent and the insert waits until that call finishes",
+      f.hass.calls.length === 1 && eq(f.hass.calls[0], del(1)), f.hass.calls);
+    queued[0](); await sleep(20);
+    check("LGK22 then the new character is inserted", eq(f.hass.calls, [del(1), ins("X")]), f.hass.calls);
+    f.card.remove(); w.localStorage.clear();
+
+    // Reopen: the sheet starts empty, so the next edit makes the TV match the sheet (it does not append).
+    f = mount(w, { players: [{ entity: ent, platform: "webostv" }] }, states());
+    f.$(".kbd").click();
+    await type(f, "hi");
+    f.$('[data-act="close"]').click();
+    f.$(".kbd").click();
+    f.hass.calls.length = 0;
+    await type(f, "h");
+    check("LGK23 reopening and typing makes the TV match the sheet (delete the extra, don't append)",
+      eq(f.hass.calls, [del(1)]), f.hass.calls);
+    f.card.remove(); w.localStorage.clear();
+
+    // A custom actions.text still receives the whole string.
+    f = mount(w, { players: [{ entity: ent, platform: "webostv", actions: { text: { service: "webostv.command", data: { command: "custom", text: "$text" } } } }] }, states());
+    f.$(".kbd").click();
+    f.hass.calls.length = 0;
+    await type(f, "ab");
+    check("LGK24 actions.text override still gets the whole string",
+      eq(f.hass.calls, [["webostv", "command", { command: "custom", text: "ab" }]]), f.hass.calls);
+    f.card.remove(); w.localStorage.clear();
+
+    // Kodi is unchanged: the second update is still the whole string with done false.
+    f = mount(w, { players: [{ entity: "media_player.kodi", platform: "kodi" }] }, states());
+    f.$(".kbd").click();
+    const kta = f.$(".kb textarea");
+    kta.value = "ab"; kta.dispatchEvent(new w.Event("input")); await sleep(400);
+    f.hass.calls.length = 0;
+    kta.value = "abc"; kta.dispatchEvent(new w.Event("input")); await sleep(400);
+    check("LGK25 Kodi still sends the whole string (done false), not just the new character",
+      eq(f.hass.calls, [["kodi", "call_method", { entity_id: "media_player.kodi", method: "Input.SendText", text: "abc", done: false }]]), f.hass.calls);
+    f.card.remove(); w.localStorage.clear();
+
+    // Streaming box that replaces the field: the second update is still the whole string.
+    const box = { entity: "media_player.lr_appletv", platform: "apple_tv", remote: "remote.lr_appletv", config_entry_id: "ENTRY1", keyboard_sensor: "binary_sensor.lr_keyboard" };
+    f = mount(w, { players: [box] }, states({ "binary_sensor.lr_keyboard": { state: "on" } }));
+    f.$(".kbd").click();
+    const ata = f.$(".kb textarea");
+    ata.value = "ab"; ata.dispatchEvent(new w.Event("input")); await sleep(400);
+    f.hass.calls.length = 0;
+    ata.value = "abc"; ata.dispatchEvent(new w.Event("input")); await sleep(400);
+    check("LGK26 streaming box still sends the whole field on each update",
+      eq(f.hass.calls, [["apple_tv", "set_keyboard_text", { config_entry_id: "ENTRY1", text: "abc" }]]), f.hass.calls);
+    f.card.remove(); w.localStorage.clear();
+  }
+
   // URL pick (Sidebar Mini Player remote_path: /remote?player={entity})
   w.localStorage.clear();
   w.history.pushState(null, "", "/remote?player=media_player.bed_appletv");
