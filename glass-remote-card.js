@@ -72,8 +72,10 @@
  * A short press of Home launches it with webostv.command system.launcher/launch {id} (by id, not the source name).
  * A long press uses the card's existing hold handling and sends the HOME button, which is what a short press did
  * before, and does not also fire the short press. Unset, Home is unchanged (short HOME, long MENU). Other platforms
- * are unchanged. The card had no visual editor; it now has one for this option only: "Home button opens custom app"
- * on a webOS player, with an app-id field (placeholder com.mbs.communityhome). Off removes the key. Why: Evan's LG
+ * are unchanged. The card had no visual editor; it now has one, with "Home button opens custom app"
+ * on a webOS player, with an app-id field (placeholder com.mbs.communityhome). Off removes the key. The same editor
+ * lists each player's shortcuts (name, icon, remove). Name and icon edits leave the rest of the shortcut as written.
+ * On webOS, Add shortcut picks an app from source_list and saves media_player.select_source. Why: Evan's LG
  * G5 runs a custom launcher (com.mbs.communityhome) and a long press should still reach the real LG Home.
  * 0.2.7 (Grok Bot, 16 Oct 2026): PIN Pad shows when the app is unknown. What: `apps` only hides it when the player
  * reports an app (app_id / app_name / source) that isn't in the list; with no app info at all it is allowed, menu and
@@ -1108,9 +1110,20 @@
   const icon = (name) => `<span class="icon">${ICONS[name] || ""}</span>`;
 
   // ---------------------------------------------------------------------------
-  // Visual editor (0.2.9). The card was YAML-only. This editor only sets home_app
-  // on LG webOS players; every other key is left as it was.
+  // Visual editor (0.2.9). The card was YAML-only. This editor sets home_app on LG
+  // webOS players, and edits shortcuts (name, icon, remove; add an app on webOS).
+  // Every other key is left as it was.
   // ---------------------------------------------------------------------------
+  function playerSources(hass, entity) {
+    const st = hass && hass.states && entity && hass.states[entity];
+    const list = st && st.attributes && st.attributes.source_list;
+    return Array.isArray(list) ? list.map((s) => String(s)).filter(Boolean) : [];
+  }
+  function readControl(el) {
+    if (!el) return "";
+    return String(el.value == null ? "" : el.value).trim();
+  }
+  const iconPicker = () => typeof customElements !== "undefined" && !!customElements.get("ha-icon-picker");
   function asPlayer(raw) {
     if (typeof raw === "string") return { entity: raw };
     return raw && typeof raw === "object" ? raw : {};
@@ -1147,10 +1160,16 @@
     .row input:focus-visible + .switch { outline: 2px solid var(--primary-color, #03a9f4); outline-offset: 2px; }
     .field { display: flex; flex-direction: column; gap: 4px; margin: 4px 0 0 52px; }
     .field[hidden] { display: none; }
-    .field span { font-size: 12px; color: var(--secondary-text-color, #727272); }
-    .field input { font: inherit; font-size: 16px; padding: 10px 12px; border-radius: 4px; width: 100%; box-sizing: border-box;
+    .field span, .sc-h { font-size: 12px; color: var(--secondary-text-color, #727272); }
+    .sc-h { font-weight: 500; margin: 14px 0 8px; color: var(--primary-text-color, inherit); font-size: 14px; }
+    .field input, .field select { font: inherit; font-size: 16px; padding: 10px 12px; border-radius: 4px; width: 100%; box-sizing: border-box;
       border: 1px solid var(--divider-color, rgba(0,0,0,.24)); background: var(--card-background-color, transparent); color: var(--primary-text-color, inherit); }
-    .field input:focus { outline: 2px solid var(--primary-color, #03a9f4); border-color: transparent; }
+    .field input:focus, .field select:focus { outline: 2px solid var(--primary-color, #03a9f4); border-color: transparent; }
+    .sc-sec .field { margin-left: 0; }
+    .sc { margin: 0 0 10px; padding-bottom: 8px; border-bottom: 1px solid var(--divider-color, rgba(127,127,127,.25)); }
+    .add { margin-top: 8px; }
+    button.mini { font: inherit; height: 36px; margin-top: 8px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--divider-color, rgba(0,0,0,.24)); background: transparent; color: inherit; cursor: pointer; }
+    button.mini:disabled { opacity: .45; cursor: default; }
     .na { margin: 0; color: var(--secondary-text-color, #727272); font-size: 13px; }
     code { font-size: 0.92em; }
   `;
@@ -1162,55 +1181,121 @@
       this._config = {};
       this._open = {};
       this._sig = null;
-      this.shadowRoot.addEventListener("change", (e) => this._onToggle(e));
-      this.shadowRoot.addEventListener("input", (e) => this._onAppId(e));
+      this._rendering = false;
+      this.shadowRoot.addEventListener("change", (e) => this._onChange(e));
+      this.shadowRoot.addEventListener("input", (e) => this._onInput(e));
+      this.shadowRoot.addEventListener("click", (e) => this._onClick(e));
+      this.shadowRoot.addEventListener("value-changed", (e) => this._onPicker(e));
     }
-    set hass(hass) { this._hass = hass; if (this._sig != null) this._syncNames(); }
+    set hass(hass) { this._hass = hass; if (this._sig != null) { this._syncNames(); this._syncSources(); } }
     get hass() { return this._hass; }
+    _sigOf(config) {
+      return editorPlayers(config).map((raw, i) => {
+        const p = asPlayer(raw);
+        const n = Array.isArray(p.shortcuts) ? p.shortcuts.length : 0;
+        return i + ":" + (p.entity || "") + ":" + editorPlatform(raw) + ":" + n;
+      }).join("\n");
+    }
     setConfig(config) {
       this._config = config && typeof config === "object" ? config : {};
-      const sig = editorPlayers(this._config).map((raw, i) => i + ":" + (asPlayer(raw).entity || "") + ":" + editorPlatform(raw)).join("\n");
+      const sig = this._sigOf(this._config);
       if (sig !== this._sig) { this._sig = sig; this._open = {}; this._render(); }
       else this._sync();
     }
     _rows() { return editorPlayers(this._config); }
+    _iconControl(value, attr) {
+      const v = value || "";
+      if (iconPicker()) return `<ha-icon-picker ${attr} label="Icon" value="${esc(v)}"></ha-icon-picker>`;
+      return `<label class="field"><span>Icon</span><input type="text" ${attr} placeholder="mdi:apps" spellcheck="false" autocapitalize="off" autocomplete="off" value="${esc(v)}"></label>`;
+    }
+    _shortcutList(raw) {
+      const p = asPlayer(raw);
+      return Array.isArray(p.shortcuts) ? p.shortcuts : [];
+    }
+    _shortcutsHtml(raw) {
+      const list = this._shortcutList(raw);
+      const rows = list.map((sc, j) => {
+        const obj = sc && typeof sc === "object" && !Array.isArray(sc) ? sc : {};
+        return `<div class="sc" data-sc="${j}">
+          <label class="field"><span>Name</span><input type="text" data-sc-edit-name spellcheck="false" value="${esc(obj.name || "")}"></label>
+          ${this._iconControl(obj.icon || "", "data-sc-edit-icon")}
+          <button type="button" class="mini" data-sc-remove>Remove</button>
+        </div>`;
+      }).join("");
+      const empty = list.length ? "" : `<p class="na">No shortcuts yet.</p>`;
+      return `<div class="sc-sec"><div class="sc-h">Shortcuts</div>${empty}${rows}${this._addHtml(raw)}</div>`;
+    }
+    _addHtml(raw) {
+      if (editorPlatform(raw) !== "webostv") {
+        return `<div class="add" data-sc-add><button type="button" class="mini" data-sc-add-btn disabled>Add shortcut</button><p class="na">New shortcuts for this player are edited in YAML.</p></div>`;
+      }
+      const sources = playerSources(this._hass, asPlayer(raw).entity);
+      const opts = [`<option value="">Select an app</option>`].concat(sources.map((s) => `<option value="${esc(s)}">${esc(s)}</option>`)).join("");
+      const hint = sources.length ? "" : `<p class="na">No apps reported yet.</p>`;
+      return `<div class="add" data-sc-add>
+        <label class="field"><span>App</span><select data-sc-source>${opts}</select></label>
+        <label class="field"><span>Name</span><input type="text" data-sc-add-name placeholder="Same as the app" spellcheck="false"></label>
+        ${this._iconControl("mdi:apps", "data-sc-add-icon")}
+        ${hint}
+        <button type="button" class="mini" data-sc-add-btn disabled>Add shortcut</button>
+      </div>`;
+    }
     _render() {
+      this._rendering = true;
       const rows = this._rows().map((raw, i) => {
         const p = asPlayer(raw);
         const name = playerLabel(this._hass, p);
         const openKey = i + ":" + (p.entity || "");
-        if (editorPlatform(raw) !== "webostv") {
-          return `<section class="player" data-player="${i}"><div class="who">${esc(name)}</div><div class="ent">${esc(p.entity || "")}</div><p class="na">Only LG webOS players have this option.</p></section>`;
+        const webos = editorPlatform(raw) === "webostv";
+        let home = `<p class="na">The Home button option is only for LG webOS.</p>`;
+        if (webos) {
+          const id = homeAppId(p);
+          if (id) this._open[openKey] = true;
+          const open = !!this._open[openKey];
+          home = `<label class="row"><input type="checkbox" role="switch" data-home-toggle${open ? " checked" : ""}><span class="switch" aria-hidden="true"></span><span>Home button opens custom app</span></label>
+            <label class="field" data-home-field${open ? "" : " hidden"}><span>App id</span><input type="text" data-home-app placeholder="com.mbs.communityhome" spellcheck="false" autocapitalize="off" autocorrect="off" autocomplete="off" value="${esc(id)}"></label>`;
         }
-        const id = homeAppId(p);
-        if (id) this._open[openKey] = true;
-        const open = !!this._open[openKey];
-        return `<section class="player" data-player="${i}" data-open-key="${esc(openKey)}">
+        return `<section class="player" data-player="${i}"${webos ? ` data-open-key="${esc(openKey)}"` : ""}>
           <div class="who">${esc(name)}</div><div class="ent">${esc(p.entity || "")}</div>
-          <label class="row"><input type="checkbox" role="switch" data-home-toggle${open ? " checked" : ""}><span class="switch" aria-hidden="true"></span><span>Home button opens custom app</span></label>
-          <label class="field" data-home-field${open ? "" : " hidden"}><span>App id</span><input type="text" data-home-app placeholder="com.mbs.communityhome" spellcheck="false" autocapitalize="off" autocorrect="off" autocomplete="off" value="${esc(id)}"></label>
+          ${home}
+          ${this._shortcutsHtml(raw)}
         </section>`;
       }).join("");
       const empty = rows ? "" : `<p class="na">Add a player under <code>players:</code> in the YAML.</p>`;
-      this.shadowRoot.innerHTML = `<style>${EDITOR_CSS}</style><div class="ed"><p class="note">Home button on LG webOS. Other options are edited as YAML.</p>${rows}${empty}</div>`;
+      this.shadowRoot.innerHTML = `<style>${EDITOR_CSS}</style><div class="ed"><p class="note">Home button on LG webOS, and shortcuts. Other options are edited as YAML.</p>${rows}${empty}</div>`;
+      this.shadowRoot.querySelectorAll("ha-icon-picker").forEach((el) => { el.value = el.getAttribute("value") || ""; });
+      this._rendering = false;
     }
     _sync() {
       const rows = this._rows();
+      this._rendering = true;
       this.shadowRoot.querySelectorAll("[data-player]").forEach((row) => {
-        const box = row.querySelector("[data-home-toggle]");
-        if (!box) return;
         const p = asPlayer(rows[+row.dataset.player]);
-        const id = homeAppId(p);
-        const key = row.dataset.openKey;
-        if (id) this._open[key] = true;
-        const open = !!this._open[key];
-        box.checked = open;
-        const field = row.querySelector("[data-home-field]");
-        if (field) field.hidden = !open;
-        const input = row.querySelector("[data-home-app]");
-        if (input && this.shadowRoot.activeElement !== input) input.value = id;
+        const box = row.querySelector("[data-home-toggle]");
+        if (box) {
+          const id = homeAppId(p);
+          const key = row.dataset.openKey;
+          if (id) this._open[key] = true;
+          const open = !!this._open[key];
+          box.checked = open;
+          const field = row.querySelector("[data-home-field]");
+          if (field) field.hidden = !open;
+          const input = row.querySelector("[data-home-app]");
+          if (input && this.shadowRoot.activeElement !== input) input.value = id;
+        }
+        const list = Array.isArray(p.shortcuts) ? p.shortcuts : [];
+        row.querySelectorAll("[data-sc]").forEach((scRow) => {
+          const sc = list[+scRow.dataset.sc];
+          const obj = sc && typeof sc === "object" ? sc : {};
+          const name = scRow.querySelector("[data-sc-edit-name]");
+          if (name && this.shadowRoot.activeElement !== name) name.value = obj.name || "";
+          const icon = scRow.querySelector("[data-sc-edit-icon]");
+          if (icon && this.shadowRoot.activeElement !== icon && readControl(icon) !== String(obj.icon || "")) icon.value = obj.icon || "";
+        });
       });
       this._syncNames();
+      this._syncSources();
+      this._rendering = false;
     }
     _syncNames() {
       const rows = this._rows();
@@ -1218,6 +1303,28 @@
         const who = row.querySelector(".who");
         if (who) who.textContent = playerLabel(this._hass, asPlayer(rows[+row.dataset.player]));
       });
+    }
+    _syncSources() {
+      this.shadowRoot.querySelectorAll("[data-sc-source]").forEach((sel) => {
+        const i = +sel.closest("[data-player]").dataset.player;
+        const sources = playerSources(this._hass, asPlayer(this._rows()[i]).entity);
+        const cur = sel.value;
+        const have = [...sel.options].map((o) => o.value).join("\n");
+        const wanted = ["", ...sources].join("\n");
+        if (have !== wanted) {
+          const prev = sel.getAttribute("data-prev") || "";
+          sel.innerHTML = `<option value="">Select an app</option>` + sources.map((s) => `<option value="${esc(s)}">${esc(s)}</option>`).join("");
+          if (sources.includes(cur)) sel.value = cur;
+          if (prev) sel.setAttribute("data-prev", prev);
+        }
+        const btn = sel.closest("[data-sc-add]").querySelector("[data-sc-add-btn]");
+        if (btn) btn.disabled = !sel.value;
+      });
+    }
+    _onChange(e) {
+      if (this._rendering) return;
+      this._onToggle(e);
+      if (e.target.matches && e.target.matches("[data-sc-source]")) this._onSource(e.target);
     }
     _onToggle(e) {
       const box = e.target;
@@ -1239,6 +1346,12 @@
         if (homeAppId(asPlayer(this._rows()[i]))) this._emit(i, "");
       }
     }
+    _onInput(e) {
+      if (this._rendering) return;
+      this._onAppId(e);
+      const t = e.target;
+      if (t.matches && (t.matches("[data-sc-edit-name]") || t.matches("[data-sc-edit-icon]"))) this._editShortcutField(t);
+    }
     _onAppId(e) {
       const input = e.target;
       if (!input.matches || !input.matches("[data-home-app]")) return;
@@ -1247,21 +1360,121 @@
       if (id === homeAppId(asPlayer(this._rows()[i]))) return;
       this._emit(i, id);
     }
-    /** Write home_app onto player `index` (empty removes it) and tell the dashboard. Other keys are kept. */
-    _emit(index, id) {
+    _onSource(sel) {
+      const add = sel.closest("[data-sc-add]");
+      const name = add.querySelector("[data-sc-add-name]");
+      const prev = sel.getAttribute("data-prev") || "";
+      if (name && (!name.value.trim() || name.value === prev)) name.value = sel.value;
+      sel.setAttribute("data-prev", sel.value);
+      const btn = add.querySelector("[data-sc-add-btn]");
+      if (btn) btn.disabled = !sel.value;
+    }
+    _onClick(e) {
+      const rm = e.target.closest && e.target.closest("[data-sc-remove]");
+      if (rm) {
+        e.preventDefault();
+        const i = +rm.closest("[data-player]").dataset.player;
+        this._removeShortcut(i, +rm.closest("[data-sc]").dataset.sc);
+        return;
+      }
+      const add = e.target.closest && e.target.closest("[data-sc-add-btn]");
+      if (add && !add.disabled) this._addShortcut(+add.closest("[data-player]").dataset.player);
+    }
+    _onPicker(e) {
+      if (this._rendering) return;
+      const el = e.target;
+      if (!el.matches || !el.matches("[data-sc-edit-icon]")) return;
+      if (e.detail && "value" in e.detail) el.value = e.detail.value;
+      this._editShortcutField(el);
+    }
+    _shortcutAt(i, j) {
+      const list = this._shortcutList(this._rows()[i]);
+      const sc = list[j];
+      return sc && typeof sc === "object" && !Array.isArray(sc) ? sc : null;
+    }
+    _editShortcutField(input) {
+      const i = +input.closest("[data-player]").dataset.player;
+      const j = +input.closest("[data-sc]").dataset.sc;
+      const current = this._shortcutAt(i, j);
+      if (!current) return;
+      if (input.hasAttribute("data-sc-edit-name")) {
+        const name = readControl(input);
+        if (!name || name === String(current.name || "")) return;
+        this._patchShortcut(i, j, { name });
+      } else {
+        const icon = readControl(input);
+        const cur = current.icon ? String(current.icon) : "";
+        if (icon === cur) return;
+        this._patchShortcut(i, j, { icon });
+      }
+    }
+    _playerObject(raw) {
+      return typeof raw === "string" ? { entity: raw } : { ...(raw && typeof raw === "object" ? raw : {}) };
+    }
+    _storePlayer(players, index, p) {
+      const keys = Object.keys(p);
+      players[index] = (keys.length === 1 && keys[0] === "entity") ? p.entity : p;
+    }
+    /** Clone the config, let `mutator` edit `players`, and tell the dashboard. Return false to skip. */
+    _withPlayers(mutator) {
       const config = JSON.parse(JSON.stringify(this._config || {}));
       const fromShorthand = !Array.isArray(config.players) || !config.players.length;
       const players = fromShorthand ? (config.entity ? [config.entity] : []) : config.players.slice();
-      const raw = players[index];
-      const p = typeof raw === "string" ? { entity: raw } : { ...(raw && typeof raw === "object" ? raw : {}) };
-      if (id) p.home_app = id;
-      else delete p.home_app;
-      const keys = Object.keys(p);
-      players[index] = (!id && keys.length === 1 && keys[0] === "entity") ? p.entity : p;
+      if (mutator(players) === false) return;
       config.players = players;
       if (fromShorthand) delete config.entity;
       this._config = config;
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config }, bubbles: true, composed: true }));
+      const sig = this._sigOf(config);
+      if (sig !== this._sig) { this._sig = sig; this._render(); }
+      else this._sync();
+    }
+    /** Write home_app onto player `index` (empty removes it). Other keys are kept. */
+    _emit(index, id) {
+      this._withPlayers((players) => {
+        const p = this._playerObject(players[index]);
+        if (id) p.home_app = id;
+        else delete p.home_app;
+        this._storePlayer(players, index, p);
+      });
+    }
+    _patchShortcut(index, j, patch) {
+      this._withPlayers((players) => {
+        const p = this._playerObject(players[index]);
+        if (!Array.isArray(p.shortcuts) || !p.shortcuts[j] || typeof p.shortcuts[j] !== "object" || Array.isArray(p.shortcuts[j])) return false;
+        const sc = p.shortcuts[j];
+        if (patch.name != null) sc.name = patch.name;
+        if ("icon" in patch) { if (patch.icon) sc.icon = patch.icon; else delete sc.icon; }
+        this._storePlayer(players, index, p);
+      });
+    }
+    _removeShortcut(index, j) {
+      this._withPlayers((players) => {
+        const p = this._playerObject(players[index]);
+        if (!Array.isArray(p.shortcuts) || j < 0 || j >= p.shortcuts.length) return false;
+        p.shortcuts = p.shortcuts.slice();
+        p.shortcuts.splice(j, 1);
+        if (!p.shortcuts.length) delete p.shortcuts;
+        this._storePlayer(players, index, p);
+      });
+    }
+    _addShortcut(index) {
+      const row = this.shadowRoot.querySelector(`[data-player="${index}"]`);
+      const sel = row && row.querySelector("[data-sc-source]");
+      const source = sel ? sel.value : "";
+      if (!source) return;
+      const typed = readControl(row.querySelector("[data-sc-add-name]"));
+      const name = typed || source;
+      const icon = readControl(row.querySelector("[data-sc-add-icon]")) || "mdi:apps";
+      const entity = asPlayer(this._rows()[index]).entity;
+      this._withPlayers((players) => {
+        const p = this._playerObject(players[index]);
+        if (p.shortcuts != null && !Array.isArray(p.shortcuts)) return false;
+        const list = Array.isArray(p.shortcuts) ? p.shortcuts.slice() : [];
+        list.push({ name, icon, service: "media_player.select_source", data: { entity_id: entity, source } });
+        p.shortcuts = list;
+        this._storePlayer(players, index, p);
+      });
     }
   }
 

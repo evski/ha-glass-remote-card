@@ -199,7 +199,7 @@ source_map:                               # optional: follow the TV's input
 
 The app is launched by id with `webostv.command` and `system.launcher/launch` (`payload: {id}`), so it does not depend on the source list or on the name the TV shows for the app.
 
-In the visual editor, an LG webOS player has **Home button opens custom app**. Turn it on and enter the app id. Turn it off and `home_app` is removed. The visual editor only covers this option. Everything else is still YAML. The toggle is shown when `platform` is `webostv`, or when the platform is left out and the entity id is guessed as one (it contains `lg` or `webos`).
+In the visual editor, an LG webOS player has **Home button opens custom app**. Turn it on and enter the app id. Turn it off and `home_app` is removed. The toggle is shown when `platform` is `webostv`, or when the platform is left out and the entity id is guessed as one (it contains `lg` or `webos`). The same editor also edits [shortcuts](#shortcuts). Everything else is still YAML.
 
 `actions.home` still replaces the short press, and `actions.home_hold` still replaces the long press. The TV menu stays under More → **TV Settings**.
 
@@ -313,6 +313,19 @@ Text placeholders work in any string inside `data` or `target`:
 - A value of exactly `$text` is replaced too, as in the `text` action.
 
 The card fills these in itself, so they work with any service, not only template-aware ones.
+
+In the visual editor each player has a **Shortcuts** section. Shortcuts already in the YAML are listed with a name, an icon and **Remove**. Changing the name or the icon leaves the rest of that shortcut as it was (`service`, `data`, `prompt`, `actions` and anything else). **Add shortcut** on an LG webOS player picks an app from that player's source list. The name starts as the app name and the icon starts as `mdi:apps` (an icon picker when Home Assistant provides one, otherwise a text field). Adding one saves:
+
+```yaml
+- name: Netflix
+  icon: mdi:apps
+  service: media_player.select_source
+  data:
+    entity_id: media_player.living_room_tv
+    source: Netflix
+```
+
+On other players, new shortcuts are still written in YAML.
 
 **Example (Kodi add-on):** these shortcuts open a video add-on's movie search, TV search and a list page in Kodi through `kodi.call_method` with `GUI.ActivateWindow`. They use the Umbrella add-on's plugin URLs only as an example. Any add-on that takes `plugin://` URLs works the same way; check the add-on's own docs or source for its action names.
 

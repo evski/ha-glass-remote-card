@@ -1237,7 +1237,7 @@ function ptr(w, el, type, x = 100, y = 100) {
     const tvRow = row("media_player.living_room_tv");
     check("ED2 note says other options stay in YAML", /Other options are edited as YAML/.test(ed.shadowRoot.querySelector(".note").textContent));
     check("ED3 non-webOS players have no toggle", !kodiRow.querySelector("[data-home-toggle]") && !tvRow.querySelector("[data-home-toggle]") &&
-      kodiRow.querySelector(".na").textContent === "Only LG webOS players have this option.");
+      kodiRow.querySelector(".na").textContent === "The Home button option is only for LG webOS.");
     check("ED4 a guessed LG player shows the toggle, off, with the app id hidden",
       lgRow.querySelector(".who").textContent === "LG OLED" && !lgRow.querySelector("[data-home-toggle]").checked && lgRow.querySelector("[data-home-field]").hidden);
     check("ED5 placeholder is the app id", lgRow.querySelector("[data-home-app]").getAttribute("placeholder") === "com.mbs.communityhome");
@@ -1307,6 +1307,126 @@ function ptr(w, el, type, x = 100, y = 100) {
     const none = C.getConfigElement();
     none.setConfig({});
     check("ED21 no players yet: a YAML hint, no toggle", !none.shadowRoot.querySelector("[data-home-toggle]") && /players:/.test(none.shadowRoot.textContent));
+
+    // Shortcuts in the visual editor. Existing YAML is kept; only name and icon are edited.
+    const movies = {
+      name: "Search Movies", icon: "mdi:movie-search", prompt: "Search movies", placeholder: "Title", input: false,
+      service: "kodi.call_method",
+      data: { entity_id: "media_player.kodi", method: "GUI.ActivateWindow", window: "videos", parameters: ["plugin://plugin.video.umbrella/?action=movieSearchterm&name={text_url}", "return"] },
+    };
+    const trakt = {
+      name: "Trakt Progress",
+      actions: [{ service: "kodi.call_method", data: { method: "GUI.ActivateWindow", window: "videos" }, target: { entity_id: "media_player.kodi" } }],
+    };
+    const scEd = C.getConfigElement();
+    w.document.body.appendChild(scEd);
+    const scEvents = [];
+    scEd.addEventListener("config-changed", (e) => scEvents.push(e.detail.config));
+    scEd.hass = { states: {
+      "media_player.lg_g5": { state: "on", attributes: { friendly_name: "LG G5", source_list: ["Netflix", "YouTube", "Home"] } },
+      "media_player.kodi": { state: "on", attributes: { friendly_name: "Kodi" } },
+    } };
+    scEd.setConfig({
+      type: "custom:glass-remote-card",
+      players: [
+        { entity: "media_player.kodi", platform: "kodi", volume_entity: "media_player.avr", shortcuts: [movies, trakt] },
+        { entity: "media_player.lg_g5", platform: "webostv", name: "LG G5", shortcuts: [{ name: "Guide", icon: "mdi:television-guide", service: "script.guide", data: { x: 1 }, prompt: "Guide" }] },
+      ],
+    });
+    const scRow = (entity) => [...scEd.shadowRoot.querySelectorAll(".player")].find((n) => n.querySelector(".ent").textContent === entity);
+    const kRow = scRow("media_player.kodi");
+    const gRow = scRow("media_player.lg_g5");
+    check("ED22 each player lists shortcuts with name, icon and remove, and an Add shortcut row",
+      kRow.querySelector(".sc-h").textContent === "Shortcuts" && kRow.querySelectorAll("[data-sc]").length === 2 &&
+      kRow.querySelector("[data-sc-edit-name]").value === "Search Movies" && kRow.querySelector("[data-sc-edit-icon]").value === "mdi:movie-search" &&
+      kRow.querySelector("[data-sc-remove]") && kRow.querySelector("[data-sc-add-btn]").textContent === "Add shortcut" &&
+      gRow.querySelectorAll("[data-sc]").length === 1 && gRow.querySelector("[data-sc-add-btn]").textContent === "Add shortcut");
+    check("ED23 rendering shortcuts does not rewrite the config", scEvents.length === 0);
+    check("ED24 other players have no app picker", !kRow.querySelector("[data-sc-source]") && kRow.querySelector("[data-sc-add-btn]").disabled);
+    const nm = kRow.querySelectorAll("[data-sc-edit-name]")[0];
+    nm.value = "Films";
+    nm.dispatchEvent(new w.Event("input", { bubbles: true }));
+    const renamed = scEvents[0].players[0].shortcuts;
+    check("ED25 renaming keeps service, data, prompt and the other shortcut",
+      renamed[0].name === "Films" && renamed[0].icon === "mdi:movie-search" && renamed[0].prompt === "Search movies" &&
+      renamed[0].placeholder === "Title" && renamed[0].input === false && renamed[0].service === "kodi.call_method" &&
+      eq(renamed[0].data, movies.data) && eq(renamed[1], trakt), renamed);
+    check("ED26 the untouched player is unchanged", eq(scEvents[0].players[1].shortcuts, [{ name: "Guide", icon: "mdi:television-guide", service: "script.guide", data: { x: 1 }, prompt: "Guide" }]));
+    const icn = kRow.querySelectorAll("[data-sc-edit-icon]")[1];
+    icn.value = "mdi:progress-check";
+    icn.dispatchEvent(new w.Event("input", { bubbles: true }));
+    const iconned = scEvents[1].players[0].shortcuts[1];
+    check("ED27 setting an icon on a shortcut that had none keeps its actions",
+      iconned.name === "Trakt Progress" && iconned.icon === "mdi:progress-check" && eq(iconned.actions, trakt.actions), iconned);
+    icn.value = "";
+    icn.dispatchEvent(new w.Event("input", { bubbles: true }));
+    check("ED28 clearing the icon removes only that key", !("icon" in scEvents[2].players[0].shortcuts[1]) && eq(scEvents[2].players[0].shortcuts[1].actions, trakt.actions));
+    nm.value = "   ";
+    nm.dispatchEvent(new w.Event("input", { bubbles: true }));
+    check("ED29 a blank name is not written", scEvents.length === 3 && scEvents[2].players[0].shortcuts[0].name === "Films");
+    kRow.querySelectorAll("[data-sc-remove]")[0].click();
+    const left = scEvents[3].players[0];
+    const kAfter = scRow("media_player.kodi");
+    check("ED30 remove drops that shortcut and leaves the other and the player keys",
+      left.shortcuts.length === 1 && left.shortcuts[0].name === "Trakt Progress" && eq(left.shortcuts[0].actions, trakt.actions) &&
+      left.volume_entity === "media_player.avr" && left.entity === "media_player.kodi" &&
+      kAfter.querySelector("[data-sc-edit-name]").value === "Trakt Progress", left);
+    check("ED31 the other player's shortcut survived the remove", eq(scEvents[3].players[1].shortcuts[0], { name: "Guide", icon: "mdi:television-guide", service: "script.guide", data: { x: 1 }, prompt: "Guide" }));
+    const gLive = () => scRow("media_player.lg_g5");
+    const src = gLive().querySelector("[data-sc-source]");
+    check("ED32 webOS add row lists the entity source_list", eq([...src.options].map((o) => o.value), ["", "Netflix", "YouTube", "Home"]));
+    src.value = "Netflix";
+    src.dispatchEvent(new w.Event("change", { bubbles: true }));
+    check("ED33 picking an app defaults the name to that source and enables Add",
+      gLive().querySelector("[data-sc-add-name]").value === "Netflix" && !gLive().querySelector("[data-sc-add-btn]").disabled &&
+      gLive().querySelector("[data-sc-add-icon]").value === "mdi:apps");
+    gLive().querySelector("[data-sc-add-btn]").click();
+    const addedCfg = scEvents[4];
+    const added = addedCfg.players[1].shortcuts;
+    check("ED34 add appends select_source and does not touch the existing shortcut",
+      added.length === 2 && eq(added[0], { name: "Guide", icon: "mdi:television-guide", service: "script.guide", data: { x: 1 }, prompt: "Guide" }) &&
+      eq(added[1], { name: "Netflix", icon: "mdi:apps", service: "media_player.select_source", data: { entity_id: "media_player.lg_g5", source: "Netflix" } }), added);
+    const normSc = H.normaliseConfig(addedCfg).players[1].shortcuts[1];
+    check("ED35 the added shortcut normalises to one select_source call",
+      eq(H.shortcutSteps(normSc, ""), [["media_player", "select_source", { entity_id: "media_player.lg_g5", source: "Netflix" }]]));
+    scEd.setConfig(addedCfg);
+    const g2 = scRow("media_player.lg_g5");
+    check("ED36 round trip shows the new shortcut", g2.querySelectorAll("[data-sc-edit-name]")[1].value === "Netflix" && g2.querySelectorAll("[data-sc]").length === 2);
+    g2.querySelector("[data-sc-source]").value = "YouTube";
+    g2.querySelector("[data-sc-source]").dispatchEvent(new w.Event("change", { bubbles: true }));
+    g2.querySelector("[data-sc-add-name]").value = "Films";
+    g2.querySelector("[data-sc-add-icon]").value = "mdi:youtube";
+    g2.querySelector("[data-sc-add-btn]").click();
+    const custom = scEvents[5].players[1].shortcuts[2];
+    check("ED37 a typed name and icon are stored with the chosen source",
+      eq(custom, { name: "Films", icon: "mdi:youtube", service: "media_player.select_source", data: { entity_id: "media_player.lg_g5", source: "YouTube" } }), custom);
+    const g3 = scRow("media_player.lg_g5");
+    g3.querySelector("[data-sc-source]").value = "YouTube";
+    scEd.hass = { states: { "media_player.lg_g5": { state: "on", attributes: { source_list: ["Netflix", "YouTube", "Home", "Disney+"] } }, "media_player.kodi": { state: "on", attributes: {} } } };
+    check("ED38 a later source_list refresh adds the new app and keeps the selection",
+      [...g3.querySelector("[data-sc-source]").options].some((o) => o.value === "Disney+") &&
+      g3.querySelector("[data-sc-source]").value === "YouTube");
+    scEd.remove();
+
+    class FakeIconPicker extends w.HTMLElement {
+      set value(v) { this._v = v == null ? "" : String(v); }
+      get value() { return this._v || ""; }
+    }
+    if (!w.customElements.get("ha-icon-picker")) w.customElements.define("ha-icon-picker", FakeIconPicker);
+    const pk = C.getConfigElement();
+    w.document.body.appendChild(pk);
+    let picked = null;
+    pk.addEventListener("config-changed", (e) => { picked = e.detail.config; });
+    pk.setConfig({ players: [{ entity: "media_player.lg_g5", platform: "webostv", shortcuts: [movies] }] });
+    const picker = pk.shadowRoot.querySelector("ha-icon-picker[data-sc-edit-icon]");
+    const addPicker = pk.shadowRoot.querySelector("ha-icon-picker[data-sc-add-icon]");
+    check("ED39 ha-icon-picker is used when it is registered", picker && picker.value === "mdi:movie-search" && addPicker && addPicker.value === "mdi:apps" && !pk.shadowRoot.querySelector("input[data-sc-edit-icon]"));
+    picker.value = "mdi:film";
+    picker.dispatchEvent(new w.CustomEvent("value-changed", { bubbles: true, detail: { value: "mdi:film" } }));
+    check("ED40 a picker change updates the icon and leaves the Kodi shortcut body",
+      picked && picked.players[0].shortcuts[0].icon === "mdi:film" && picked.players[0].shortcuts[0].service === "kodi.call_method" &&
+      eq(picked.players[0].shortcuts[0].data, movies.data) && picked.players[0].shortcuts[0].prompt === "Search movies", picked && picked.players[0].shortcuts[0]);
+    pk.remove();
   }
 
   // URL pick (Sidebar Mini Player remote_path: /remote?player={entity})
