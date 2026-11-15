@@ -4,10 +4,17 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.9] - 2026-11-15
+
+### Added
+- **`home_app`** on an LG webOS player (`platform: webostv`). Set it to a webOS app id, for example `com.mbs.communityhome`. A short press of Home launches that app by id (`webostv.command`, `system.launcher/launch`, payload `{id}`). A long press of Home sends the TV's Home button, which is what a short press did before, and does not also fire the short press. Leave `home_app` out and Home is unchanged: a short press is Home and a long press is Menu. Other players are unchanged. `actions.home` and `actions.home_hold` still override those presses.
+- A visual editor for this option. The card didn't have one. On an LG webOS player it shows **Home button opens custom app**. Turn it on and a text field asks for the app id (placeholder `com.mbs.communityhome`). Turn it off and `home_app` is removed. An empty app id is ignored. Other options stay in YAML.
+
 ## [0.2.8] - 2026-11-15
 
 ### Fixed
 - **LG webOS keyboard.** Typing sent the whole text box on every change (`com.webos.service.ime/insertText` with `replace: 1`). On many webOS fields that flag is not applied, so each update was appended and the text was duplicated. Clear sent an empty insert, which removed nothing. Typing now sends only the new characters, and backspace deletes just those characters (`deleteCharacters`). Clear empties the text field. Enter presses the TV's enter key after any change that has not been sent yet, and does not send the whole string again. Kodi and the other players are unchanged.
+
 
 ## [0.2.7] - 2026-10-16
 
@@ -232,6 +239,7 @@ Not affiliated with or endorsed by Apple Inc. Apple TV is a trademark of Apple I
 - Text: keyboard and dictation text box, and the automatic "wants text" bar.
 - Look and feel: frosted glass styling, thin line icons, haptics.
 
+[0.2.9]: https://github.com/evski/ha-glass-remote-card/releases/tag/v0.2.9
 [0.2.8]: https://github.com/evski/ha-glass-remote-card/releases/tag/v0.2.8
 [0.2.7]: https://github.com/evski/ha-glass-remote-card/releases/tag/v0.2.7
 [0.2.6]: https://github.com/evski/ha-glass-remote-card/releases/tag/v0.2.6

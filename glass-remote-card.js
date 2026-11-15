@@ -68,6 +68,13 @@
  * 0.2.2 (Grok Bot, 11 Oct 2026): no duplicate Info. What: while a player shows the bottom-row Info button,
  * "info" is left out of that player's More menu (default or custom `more:` list). Players with CH (no Info
  * button) keep Info in More. Why: Evan: "Good we don't need info in the menu now then".
+ * 0.2.9 (Grok Bot, 15 Nov 2026): optional LG webOS Home app. What: players[].home_app is a webOS app id.
+ * A short press of Home launches it with webostv.command system.launcher/launch {id} (by id, not the source name).
+ * A long press uses the card's existing hold handling and sends the HOME button, which is what a short press did
+ * before, and does not also fire the short press. Unset, Home is unchanged (short HOME, long MENU). Other platforms
+ * are unchanged. The card had no visual editor; it now has one for this option only: "Home button opens custom app"
+ * on a webOS player, with an app-id field (placeholder com.mbs.communityhome). Off removes the key. Why: Evan's LG
+ * G5 runs a custom launcher (com.mbs.communityhome) and a long press should still reach the real LG Home.
  * 0.2.8 (Grok Bot, 15 Nov 2026): LG webOS keyboard sends one change at a time. What: the typing sheet
  * used to send the whole box on every update with com.webos.service.ime/insertText and replace: 1, and
  * Clear sent that call with an empty string. On many webOS fields that flag is not applied, so each update
@@ -104,8 +111,9 @@
 (() => {
   "use strict";
 
-  const VERSION = "0.2.8";
+  const VERSION = "0.2.9";
   const TAG = "glass-remote-card";
+  const EDITOR_TAG = "glass-remote-card-editor";
   const PICK_KEY = "glass-remote-card:pick:";
 
   // ---------------------------------------------------------------------------
@@ -198,6 +206,12 @@
   const mp = (p, service, extra = {}) => ["media_player", service, { entity_id: p.entity, ...extra }];
   const kodi = (p, method, params = {}) => ["kodi", "call_method", { entity_id: p.entity, method, ...params }];
   const lg = (p, button) => ["webostv", "button", { entity_id: p.entity, button }];
+  /** 0.2.9: webOS app id from `home_app`, or "" when it isn't a usable id. */
+  function homeAppId(p) {
+    return p && typeof p.home_app === "string" ? p.home_app.trim() : "";
+  }
+  /** Launch a webOS app by id. HA's webostv integration turns this into ssap://system.launcher/launch. */
+  const lgLaunch = (p, id) => ["webostv", "command", { entity_id: p.entity, command: "system.launcher/launch", payload: { id } }];
   const isOff = (st) => !st || OFF_STATES.includes(st.state);
 
   // LG webOS IME (0.2.8). insertText's replace flag is not applied on many text fields: sending the whole
@@ -292,7 +306,11 @@
       keys: {
         up: (p) => lg(p, "UP"), down: (p) => lg(p, "DOWN"), left: (p) => lg(p, "LEFT"), right: (p) => lg(p, "RIGHT"),
         select: (p) => lg(p, "ENTER"), select_hold: (p) => lg(p, "MENU"),
-        back: (p) => lg(p, "BACK"), home: (p) => lg(p, "HOME"), home_hold: (p) => lg(p, "MENU"),
+        back: (p) => lg(p, "BACK"),
+        // 0.2.9: home_app launches that app on a short press. Long press (existing _hold handling) sends HOME,
+        // the short-press action from before. With no home_app, short is HOME and long is MENU, as before.
+        home: (p) => { const id = homeAppId(p); return id ? lgLaunch(p, id) : lg(p, "HOME"); },
+        home_hold: (p) => lg(p, homeAppId(p) ? "HOME" : "MENU"),
         play_pause: (p) => mp(p, "media_play_pause"),
         skip_back: (p) => lg(p, "REWIND"), skip_fwd: (p) => lg(p, "FASTFORWARD"),
         info: (p) => lg(p, "INFO"), subtitles: (p) => lg(p, "CC"),
@@ -360,6 +378,14 @@
       if (p.shortcuts !== undefined) p.shortcuts = normaliseShortcuts(p.shortcuts, i); // 0.2.0 (Grok Bot, 11 Oct 2026)
       if (p.switch_input !== undefined && typeof p.switch_input !== "boolean") throw new Error(`glass-remote-card: players[${i}].switch_input must be true or false`); // 0.2.4
       if (p.info_button !== undefined && typeof p.info_button !== "boolean") throw new Error(`glass-remote-card: players[${i}].info_button must be true or false`); // 0.2.1
+      // 0.2.9: blank, false or null means unset (the key is dropped). A real id is webOS-only.
+      if (p.home_app != null && p.home_app !== false && p.home_app !== "") {
+        if (typeof p.home_app !== "string") throw new Error(`glass-remote-card: players[${i}].home_app must be a webOS app id (for example com.mbs.communityhome)`);
+        const id = homeAppId(p);
+        if (!id) delete p.home_app;
+        else if (p.platform !== "webostv") throw new Error(`glass-remote-card: players[${i}].home_app is only for platform: webostv`);
+        else p.home_app = id;
+      } else if ("home_app" in p) delete p.home_app;
       p.pin_pad = normalisePinPad(p.pin_pad, p, i); // 0.2.5 (Grok Bot, 15 Oct 2026): null = no PIN Pad for this player
       return p;
     });
@@ -1115,6 +1141,164 @@
   const icon = (name) => `<span class="icon">${ICONS[name] || ""}</span>`;
 
   // ---------------------------------------------------------------------------
+  // Visual editor (0.2.9). The card was YAML-only. This editor only sets home_app
+  // on LG webOS players; every other key is left as it was.
+  // ---------------------------------------------------------------------------
+  function asPlayer(raw) {
+    if (typeof raw === "string") return { entity: raw };
+    return raw && typeof raw === "object" ? raw : {};
+  }
+  function editorPlayers(config) {
+    if (config && Array.isArray(config.players) && config.players.length) return config.players;
+    if (config && config.entity) return [config.entity];
+    return [];
+  }
+  function editorPlatform(raw) {
+    const p = asPlayer(raw);
+    if (p.platform && PLATFORMS[p.platform]) return p.platform;
+    if (p.platform) return String(p.platform);
+    return guessPlatform(p);
+  }
+  function playerLabel(hass, p) {
+    if (p.name) return String(p.name);
+    const st = hass && hass.states && p.entity && hass.states[p.entity];
+    const fn = st && st.attributes && st.attributes.friendly_name;
+    return fn || p.entity || "Player";
+  }
+  const EDITOR_CSS = `
+    :host { display: block; color: var(--primary-text-color, inherit); font: inherit; }
+    .note { margin: 0 0 16px; color: var(--secondary-text-color, #727272); font-size: 14px; line-height: 1.4; }
+    .player { margin: 0 0 16px; padding-bottom: 12px; border-bottom: 1px solid var(--divider-color, rgba(127,127,127,.3)); }
+    .who { font-weight: 500; }
+    .ent { color: var(--secondary-text-color, #727272); font-size: 12px; margin: 2px 0 10px; }
+    .row { position: relative; display: flex; align-items: center; gap: 12px; min-height: 40px; cursor: pointer; }
+    .row input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+    .switch { width: 40px; height: 24px; border-radius: 12px; background: var(--switch-unchecked-color, var(--disabled-text-color, #bdbdbd)); position: relative; flex: 0 0 auto; }
+    .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform .15s; }
+    .row input:checked + .switch { background: var(--switch-checked-color, var(--primary-color, #03a9f4)); }
+    .row input:checked + .switch::after { transform: translateX(16px); }
+    .row input:focus-visible + .switch { outline: 2px solid var(--primary-color, #03a9f4); outline-offset: 2px; }
+    .field { display: flex; flex-direction: column; gap: 4px; margin: 4px 0 0 52px; }
+    .field[hidden] { display: none; }
+    .field span { font-size: 12px; color: var(--secondary-text-color, #727272); }
+    .field input { font: inherit; font-size: 16px; padding: 10px 12px; border-radius: 4px; width: 100%; box-sizing: border-box;
+      border: 1px solid var(--divider-color, rgba(0,0,0,.24)); background: var(--card-background-color, transparent); color: var(--primary-text-color, inherit); }
+    .field input:focus { outline: 2px solid var(--primary-color, #03a9f4); border-color: transparent; }
+    .na { margin: 0; color: var(--secondary-text-color, #727272); font-size: 13px; }
+    code { font-size: 0.92em; }
+  `;
+
+  class GlassRemoteCardEditor extends HTMLElement {
+    constructor() {
+      super();
+      this.attachShadow({ mode: "open" });
+      this._config = {};
+      this._open = {};
+      this._sig = null;
+      this.shadowRoot.addEventListener("change", (e) => this._onToggle(e));
+      this.shadowRoot.addEventListener("input", (e) => this._onAppId(e));
+    }
+    set hass(hass) { this._hass = hass; if (this._sig != null) this._syncNames(); }
+    get hass() { return this._hass; }
+    setConfig(config) {
+      this._config = config && typeof config === "object" ? config : {};
+      const sig = editorPlayers(this._config).map((raw, i) => i + ":" + (asPlayer(raw).entity || "") + ":" + editorPlatform(raw)).join("\n");
+      if (sig !== this._sig) { this._sig = sig; this._open = {}; this._render(); }
+      else this._sync();
+    }
+    _rows() { return editorPlayers(this._config); }
+    _render() {
+      const rows = this._rows().map((raw, i) => {
+        const p = asPlayer(raw);
+        const name = playerLabel(this._hass, p);
+        const openKey = i + ":" + (p.entity || "");
+        if (editorPlatform(raw) !== "webostv") {
+          return `<section class="player" data-player="${i}"><div class="who">${esc(name)}</div><div class="ent">${esc(p.entity || "")}</div><p class="na">Only LG webOS players have this option.</p></section>`;
+        }
+        const id = homeAppId(p);
+        if (id) this._open[openKey] = true;
+        const open = !!this._open[openKey];
+        return `<section class="player" data-player="${i}" data-open-key="${esc(openKey)}">
+          <div class="who">${esc(name)}</div><div class="ent">${esc(p.entity || "")}</div>
+          <label class="row"><input type="checkbox" role="switch" data-home-toggle${open ? " checked" : ""}><span class="switch" aria-hidden="true"></span><span>Home button opens custom app</span></label>
+          <label class="field" data-home-field${open ? "" : " hidden"}><span>App id</span><input type="text" data-home-app placeholder="com.mbs.communityhome" spellcheck="false" autocapitalize="off" autocorrect="off" autocomplete="off" value="${esc(id)}"></label>
+        </section>`;
+      }).join("");
+      const empty = rows ? "" : `<p class="na">Add a player under <code>players:</code> in the YAML.</p>`;
+      this.shadowRoot.innerHTML = `<style>${EDITOR_CSS}</style><div class="ed"><p class="note">Home button on LG webOS. Other options are edited as YAML.</p>${rows}${empty}</div>`;
+    }
+    _sync() {
+      const rows = this._rows();
+      this.shadowRoot.querySelectorAll("[data-player]").forEach((row) => {
+        const box = row.querySelector("[data-home-toggle]");
+        if (!box) return;
+        const p = asPlayer(rows[+row.dataset.player]);
+        const id = homeAppId(p);
+        const key = row.dataset.openKey;
+        if (id) this._open[key] = true;
+        const open = !!this._open[key];
+        box.checked = open;
+        const field = row.querySelector("[data-home-field]");
+        if (field) field.hidden = !open;
+        const input = row.querySelector("[data-home-app]");
+        if (input && this.shadowRoot.activeElement !== input) input.value = id;
+      });
+      this._syncNames();
+    }
+    _syncNames() {
+      const rows = this._rows();
+      this.shadowRoot.querySelectorAll("[data-player]").forEach((row) => {
+        const who = row.querySelector(".who");
+        if (who) who.textContent = playerLabel(this._hass, asPlayer(rows[+row.dataset.player]));
+      });
+    }
+    _onToggle(e) {
+      const box = e.target;
+      if (!box.matches || !box.matches("[data-home-toggle]")) return;
+      const row = box.closest("[data-player]");
+      const i = +row.dataset.player;
+      const field = row.querySelector("[data-home-field]");
+      const input = row.querySelector("[data-home-app]");
+      if (box.checked) {
+        this._open[row.dataset.openKey] = true;
+        if (field) field.hidden = false;
+        if (input) try { input.focus(); } catch (_) { /* not yet in the document */ }
+        const id = input ? input.value.trim() : "";
+        if (id && id !== homeAppId(asPlayer(this._rows()[i]))) this._emit(i, id);
+      } else {
+        this._open[row.dataset.openKey] = false;
+        if (field) field.hidden = true;
+        if (input) input.value = "";
+        if (homeAppId(asPlayer(this._rows()[i]))) this._emit(i, "");
+      }
+    }
+    _onAppId(e) {
+      const input = e.target;
+      if (!input.matches || !input.matches("[data-home-app]")) return;
+      const i = +input.closest("[data-player]").dataset.player;
+      const id = input.value.trim();
+      if (id === homeAppId(asPlayer(this._rows()[i]))) return;
+      this._emit(i, id);
+    }
+    /** Write home_app onto player `index` (empty removes it) and tell the dashboard. Other keys are kept. */
+    _emit(index, id) {
+      const config = JSON.parse(JSON.stringify(this._config || {}));
+      const fromShorthand = !Array.isArray(config.players) || !config.players.length;
+      const players = fromShorthand ? (config.entity ? [config.entity] : []) : config.players.slice();
+      const raw = players[index];
+      const p = typeof raw === "string" ? { entity: raw } : { ...(raw && typeof raw === "object" ? raw : {}) };
+      if (id) p.home_app = id;
+      else delete p.home_app;
+      const keys = Object.keys(p);
+      players[index] = (!id && keys.length === 1 && keys[0] === "entity") ? p.entity : p;
+      config.players = players;
+      if (fromShorthand) delete config.entity;
+      this._config = config;
+      this.dispatchEvent(new CustomEvent("config-changed", { detail: { config }, bubbles: true, composed: true }));
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // The card
   // ---------------------------------------------------------------------------
   class GlassRemoteCard extends HTMLElement {
@@ -1128,6 +1312,11 @@
     static getStubConfig(hass) {
       const mps = Object.keys((hass && hass.states) || {}).filter((e) => e.startsWith("media_player.")).slice(0, 2);
       return { layout: "card", players: mps.length ? mps.map((entity) => ({ entity, platform: "generic" })) : [{ entity: "media_player.living_room", platform: "generic" }] };
+    }
+
+    /** 0.2.9: visual editor. HA awaits this; a plain element is fine. */
+    static getConfigElement() {
+      return document.createElement(EDITOR_TAG);
     }
 
     setConfig(config) {
@@ -1865,6 +2054,7 @@
   GlassRemoteCard.helpers = { normalisePinPad, pinAppOk, pinPath, pinSequence, pinSteps, kbFocus, kbPollInterval, kodiKeyboardFromEvent, lgImeSteps, LG_IME_CLEAR, sourceMenu, soundModeMenu, optionSteps, moreItems, hasChannels, hasInfoButton, bannerText, normaliseShortcuts, shortcutSteps, fillText, normaliseConfig, inputSteps, choosePlayer, volumeTarget, nowPlaying, stepsFor, swipeDirection, guessPlatform, PLATFORMS, ICONS };
 
   if (!customElements.get(TAG)) customElements.define(TAG, GlassRemoteCard);
+  if (!customElements.get(EDITOR_TAG)) customElements.define(EDITOR_TAG, GlassRemoteCardEditor);
   window.customCards = window.customCards || [];
   if (!window.customCards.some((c) => c.type === TAG)) {
     window.customCards.push({
