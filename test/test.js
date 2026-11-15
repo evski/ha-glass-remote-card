@@ -1116,6 +1116,199 @@ function ptr(w, el, type, x = 100, y = 100) {
     }
   }
 
+  // ---- HA: LG webOS home_app (0.2.9) ------------------------------------------
+  {
+    const launch = (entity, id = "com.mbs.communityhome") => ["webostv", "command", { entity_id: entity, command: "system.launcher/launch", payload: { id } }];
+    const btn = (entity, button) => ["webostv", "button", { entity_id: entity, button }];
+    const plain = H.normaliseConfig({ players: [{ entity: "media_player.lg_g5", platform: "webostv" }] }).players[0];
+    check("HA1 no home_app: short press is the HOME button", eq(H.stepsFor(plain, "home", S), [btn("media_player.lg_g5", "HOME")]));
+    check("HA2 no home_app: long press stays MENU", eq(H.stepsFor(plain, "home_hold", S), [btn("media_player.lg_g5", "MENU")]));
+    const app = H.normaliseConfig({ players: [{ entity: "media_player.lg_g5", home_app: "  com.mbs.communityhome  " }] }).players[0];
+    check("HA3 guessed webOS player, id trimmed", app.platform === "webostv" && app.home_app === "com.mbs.communityhome");
+    check("HA4 short press launches that app by id", eq(H.stepsFor(app, "home", S), [launch("media_player.lg_g5")]));
+    check("HA5 long press sends the HOME button", eq(H.stepsFor(app, "home_hold", S), [btn("media_player.lg_g5", "HOME")]));
+    const blanksOk = ["", "   ", false, null].every((blank) => {
+      const p = H.normaliseConfig({ players: [{ entity: "media_player.lg_g5", platform: "webostv", home_app: blank }] }).players[0];
+      return !("home_app" in p) && H.stepsFor(p, "home", S)[0][2].button === "HOME" && H.stepsFor(p, "home_hold", S)[0][2].button === "MENU";
+    });
+    check("HA6 blank home_app is dropped", blanksOk);
+    check("HA7 home_app must be a string", bad({ players: [{ entity: "media_player.lg_g5", platform: "webostv", home_app: { id: "com.mbs.communityhome" } }] }));
+    check("HA8 home_app on another platform is rejected", bad({ players: [{ entity: "media_player.kodi", platform: "kodi", home_app: "com.mbs.communityhome" }] }) &&
+      bad({ players: [{ entity: "media_player.lr_appletv", platform: "apple_tv", remote: "remote.lr_appletv", home_app: "com.mbs.communityhome" }] }));
+    const over = { ...app, actions: { home: { service: "script.turn_on", target: { entity_id: "script.lg_home" } }, home_hold: { service: "script.lg_hold" } } };
+    check("HA9 actions.home still replaces the short press", eq(H.stepsFor(over, "home", S), [["script", "turn_on", { entity_id: "script.lg_home" }]]));
+    check("HA10 actions.home_hold still replaces the long press", eq(H.stepsFor(over, "home_hold", S), [["script", "lg_hold", {}]]));
+    check("HA11 other players' Home is unchanged",
+      eq(H.stepsFor(kd, "home", S), [["kodi", "call_method", { entity_id: "media_player.kodi", method: "Input.Home" }]]) &&
+      eq(H.stepsFor(kd, "home_hold", S), [["kodi", "call_method", { entity_id: "media_player.kodi", method: "Input.ContextMenu" }]]) &&
+      eq(H.stepsFor(atv, "home", S), [["remote", "send_command", { entity_id: "remote.lr_appletv", command: "home" }]]) &&
+      eq(H.stepsFor(atv, "home_hold", S), [["remote", "send_command", { entity_id: "remote.lr_appletv", command: "home", hold_secs: 1 }]]));
+    check("HA12 a stray home_app on another platform's key map does nothing",
+      eq(H.stepsFor({ ...kd, home_app: "com.mbs.communityhome" }, "home", S), [["kodi", "call_method", { entity_id: "media_player.kodi", method: "Input.Home" }]]));
+    const switched = H.normaliseConfig({ players: [{ entity: "media_player.lg_g5", platform: "webostv", home_app: "com.mbs.communityhome", input: { entity: "media_player.avr", source: "TV" } }] }).players[0];
+    check("HA13 Home still switches input before the app launches", H.inputSteps(switched, "home", states({ "media_player.avr": { attributes: { source: "Other" } } })).length === 1 &&
+      H.inputSteps(switched, "home_hold", states({ "media_player.avr": { attributes: { source: "Other" } } })).length === 1);
+
+    const tapHome = async (card, downMs) => {
+      const home = card.$('[data-key="home"]');
+      card.hass.calls.length = 0;
+      ptr(w, home, "pointerdown");
+      if (downMs) await sleep(downMs);
+      ptr(w, home, "pointerup");
+      await sleep(downMs ? 40 : 80);
+    };
+    w.localStorage.clear();
+    m = mount(w, { players: [{ entity: "media_player.lg_g5", platform: "webostv", home_app: "com.mbs.communityhome", name: "LG G5" }] }, states());
+    await tapHome(m, 0);
+    check("HA14 short press calls only the launch", eq(m.hass.calls, [launch("media_player.lg_g5")]), m.hass.calls);
+    await sleep(700);
+    check("HA15 short press does not later fire the long press", m.hass.calls.length === 1);
+    await tapHome(m, 400);
+    check("HA16 release before the hold is still only the launch", eq(m.hass.calls, [launch("media_player.lg_g5")]), m.hass.calls);
+    await sleep(400);
+    check("HA17 the cleared hold timer does not fire afterwards", m.hass.calls.length === 1);
+    m.hass.calls.length = 0;
+    ptr(w, m.$('[data-key="home"]'), "pointerdown");
+    await sleep(700);
+    check("HA18 holding Home sends HOME once, not the launch", eq(m.hass.calls, [btn("media_player.lg_g5", "HOME")]), m.hass.calls);
+    ptr(w, m.$('[data-key="home"]'), "pointerup");
+    await sleep(40);
+    check("HA19 releasing the long press does not also fire the short press", eq(m.hass.calls, [btn("media_player.lg_g5", "HOME")]), m.hass.calls);
+    m.card.remove();
+
+    w.localStorage.clear();
+    m = mount(w, { players: [{ entity: "media_player.lg_g5", platform: "webostv" }] }, states());
+    await tapHome(m, 0);
+    check("HA20 without home_app, a short press is still HOME", eq(m.hass.calls, [btn("media_player.lg_g5", "HOME")]), m.hass.calls);
+    m.hass.calls.length = 0;
+    ptr(w, m.$('[data-key="home"]'), "pointerdown"); await sleep(700); ptr(w, m.$('[data-key="home"]'), "pointerup"); await sleep(40);
+    check("HA21 without home_app, a long press is still one MENU", eq(m.hass.calls, [btn("media_player.lg_g5", "MENU")]), m.hass.calls);
+    m.card.remove();
+
+    w.localStorage.clear();
+    m = mount(w, { players: [{ entity: "media_player.kodi", platform: "kodi" }] }, states());
+    await tapHome(m, 0);
+    check("HA22 another player: short Home unchanged", eq(m.hass.calls, [["kodi", "call_method", { entity_id: "media_player.kodi", method: "Input.Home" }]]), m.hass.calls);
+    m.hass.calls.length = 0;
+    ptr(w, m.$('[data-key="home"]'), "pointerdown"); await sleep(700); ptr(w, m.$('[data-key="home"]'), "pointerup"); await sleep(40);
+    check("HA23 another player: long Home is one hold action", eq(m.hass.calls, [["kodi", "call_method", { entity_id: "media_player.kodi", method: "Input.ContextMenu" }]]), m.hass.calls);
+    m.card.remove();
+
+    w.localStorage.clear();
+    m = mount(w, { players: [{ entity: "media_player.lr_appletv", platform: "apple_tv", remote: "remote.lr_appletv" }] }, states());
+    m.hass.calls.length = 0;
+    ptr(w, m.$('[data-key="home"]'), "pointerdown"); await sleep(700); ptr(w, m.$('[data-key="home"]'), "pointerup"); await sleep(40);
+    check("HA24 remote Home long press is still one held home command", eq(m.hass.calls, [["remote", "send_command", { entity_id: "remote.lr_appletv", command: "home", hold_secs: 1 }]]), m.hass.calls);
+    m.card.remove();
+
+    w.localStorage.clear();
+    const ic = { players: [{ entity: "media_player.lg_g5", platform: "webostv", home_app: "com.mbs.communityhome", input: { entity: "media_player.avr", source: "TV", delay: 0 } }] };
+    m = mount(w, ic, states({ "media_player.avr": { state: "on", attributes: { source: "Other" } } }));
+    await tapHome(m, 0);
+    check("HA25 short press switches the input, then launches the app", eq(m.hass.calls, [
+      ["media_player", "select_source", { entity_id: "media_player.avr", source: "TV" }],
+      launch("media_player.lg_g5"),
+    ]), m.hass.calls);
+    m.card.remove();
+    w.localStorage.clear();
+  }
+
+  // ---- ED: visual editor (0.2.9; the card had none) ---------------------------
+  {
+    const events = [];
+    const ed = C.getConfigElement();
+    check("ED1 getConfigElement returns the editor", ed && ed.tagName === "GLASS-REMOTE-CARD-EDITOR" && C.getConfigElement() !== ed);
+    w.document.body.appendChild(ed);
+    ed.addEventListener("config-changed", (e) => events.push(e));
+    const base = {
+      type: "custom:glass-remote-card",
+      layout: "fullscreen",
+      players: [
+        { entity: "media_player.kodi", platform: "kodi", volume_entity: "media_player.avr", shortcuts: [{ name: "Movies", service: "script.movies", data: { q: "{text}" } }] },
+        "media_player.lg_oled",
+        { entity: "media_player.living_room_tv", name: "Lounge TV", input: { entity: "media_player.avr", source: "TV" } },
+      ],
+    };
+    ed.hass = { states: { "media_player.lg_oled": { state: "on", attributes: { friendly_name: "LG OLED" } } } };
+    ed.setConfig(base);
+    const row = (entity) => [...ed.shadowRoot.querySelectorAll(".player")].find((n) => n.querySelector(".ent").textContent === entity);
+    const kodiRow = row("media_player.kodi");
+    const lgRow = row("media_player.lg_oled");
+    const tvRow = row("media_player.living_room_tv");
+    check("ED2 note says other options stay in YAML", /Other options are edited as YAML/.test(ed.shadowRoot.querySelector(".note").textContent));
+    check("ED3 non-webOS players have no toggle", !kodiRow.querySelector("[data-home-toggle]") && !tvRow.querySelector("[data-home-toggle]") &&
+      kodiRow.querySelector(".na").textContent === "Only LG webOS players have this option.");
+    check("ED4 a guessed LG player shows the toggle, off, with the app id hidden",
+      lgRow.querySelector(".who").textContent === "LG OLED" && !lgRow.querySelector("[data-home-toggle]").checked && lgRow.querySelector("[data-home-field]").hidden);
+    check("ED5 placeholder is the app id", lgRow.querySelector("[data-home-app]").getAttribute("placeholder") === "com.mbs.communityhome");
+    lgRow.querySelector("[data-home-toggle]").click();
+    check("ED6 turning the toggle on shows the field and does not write a key", events.length === 0 && !lgRow.querySelector("[data-home-field]").hidden && lgRow.querySelector("[data-home-toggle]").checked);
+    const appInput = lgRow.querySelector("[data-home-app]");
+    appInput.value = "   ";
+    appInput.dispatchEvent(new w.Event("input", { bubbles: true }));
+    check("ED7 a blank app id is ignored", events.length === 0);
+    appInput.value = "com.mbs.communityhome";
+    appInput.dispatchEvent(new w.Event("input", { bubbles: true }));
+    const saved = events[0];
+    check("ED8 config-changed bubbles out of the editor", saved && saved.bubbles && saved.composed && saved.detail && saved.detail.config);
+    const cfg = saved.detail.config;
+    check("ED9 app id is set and every other key is kept", cfg.type === "custom:glass-remote-card" && cfg.layout === "fullscreen" &&
+      eq(cfg.players[0], base.players[0]) && cfg.players[1].entity === "media_player.lg_oled" && cfg.players[1].home_app === "com.mbs.communityhome" &&
+      eq(cfg.players[2], base.players[2]), cfg);
+    check("ED10 the original config object is not mutated", !base.players[1].home_app && base.players[1] === "media_player.lg_oled");
+    const norm = H.normaliseConfig(cfg).players[1];
+    check("ED11 editor output launches by that id", eq(H.stepsFor(norm, "home", S), [["webostv", "command", { entity_id: "media_player.lg_oled", command: "system.launcher/launch", payload: { id: "com.mbs.communityhome" } }]]) &&
+      H.stepsFor(norm, "home_hold", S)[0][2].button === "HOME");
+    ed.setConfig(cfg);
+    check("ED12 echoing the config keeps the toggle on and the id", lgRow.querySelector("[data-home-toggle]").checked && lgRow.querySelector("[data-home-app]").value === "com.mbs.communityhome");
+    appInput.value = "";
+    appInput.dispatchEvent(new w.Event("input", { bubbles: true }));
+    const cleared = events[events.length - 1].detail.config;
+    check("ED13 clearing the field removes home_app but leaves the toggle open", cleared.players[1] === "media_player.lg_oled" &&
+      lgRow.querySelector("[data-home-toggle]").checked && !lgRow.querySelector("[data-home-field]").hidden, cleared.players[1]);
+    ed.setConfig(cleared);
+    check("ED14 a round trip with no app id keeps the open field", lgRow.querySelector("[data-home-toggle]").checked && lgRow.querySelector("[data-home-app]").value === "" && !lgRow.querySelector("[data-home-field]").hidden);
+    lgRow.querySelector("[data-home-toggle]").click();
+    check("ED15 turning the toggle off with no app id writes nothing more", events.length === 2 && lgRow.querySelector("[data-home-field]").hidden && !lgRow.querySelector("[data-home-toggle]").checked);
+    ed.setConfig({
+      players: [
+        { entity: "media_player.one", platform: "webostv", name: "One", home_app: "netflix", volume_entity: "media_player.avr" },
+        { entity: "media_player.two", platform: "webostv", name: "Two" },
+      ],
+    });
+    const one = row("media_player.one"), two = row("media_player.two");
+    check("ED16 an existing app id opens the toggle and fills the field", one.querySelector("[data-home-toggle]").checked && one.querySelector("[data-home-app]").value === "netflix" &&
+      !two.querySelector("[data-home-toggle]").checked && two.querySelector("[data-home-field]").hidden);
+    one.querySelector("[data-home-toggle]").click();
+    const off = events[events.length - 1].detail.config;
+    check("ED17 turning it off removes only that player's key", off.players[0].entity === "media_player.one" && off.players[0].name === "One" &&
+      off.players[0].volume_entity === "media_player.avr" && !("home_app" in off.players[0]) && eq(off.players[1], { entity: "media_player.two", platform: "webostv", name: "Two" }) &&
+      one.querySelector("[data-home-field]").hidden, off.players);
+    two.querySelector("[data-home-toggle]").click();
+    two.querySelector("[data-home-app]").value = "com.mbs.communityhome";
+    two.querySelector("[data-home-app]").dispatchEvent(new w.Event("input", { bubbles: true }));
+    const second = events[events.length - 1].detail.config;
+    check("ED18 the other LG player can set its own app", second.players[1].home_app === "com.mbs.communityhome" && !("home_app" in second.players[0]), second.players);
+    ed.remove();
+
+    const sh = C.getConfigElement();
+    w.document.body.appendChild(sh);
+    let shorthand = null;
+    sh.addEventListener("config-changed", (e) => { shorthand = e.detail.config; });
+    sh.setConfig({ entity: "media_player.lg_tv", layout: "card", pick_timeout: 180 });
+    check("ED19 entity shorthand for an LG player shows the toggle", sh.shadowRoot.querySelector("[data-home-toggle]") && !sh.shadowRoot.querySelector("[data-home-toggle]").checked);
+    sh.shadowRoot.querySelector("[data-home-toggle]").click();
+    sh.shadowRoot.querySelector("[data-home-app]").value = "com.mbs.communityhome";
+    sh.shadowRoot.querySelector("[data-home-app]").dispatchEvent(new w.Event("input", { bubbles: true }));
+    check("ED20 shorthand becomes a player with home_app, other card keys kept", shorthand && !shorthand.entity && shorthand.layout === "card" && shorthand.pick_timeout === 180 &&
+      eq(shorthand.players, [{ entity: "media_player.lg_tv", home_app: "com.mbs.communityhome" }]), shorthand);
+    sh.remove();
+
+    const none = C.getConfigElement();
+    none.setConfig({});
+    check("ED21 no players yet: a YAML hint, no toggle", !none.shadowRoot.querySelector("[data-home-toggle]") && /players:/.test(none.shadowRoot.textContent));
+  }
+
   // URL pick (Sidebar Mini Player remote_path: /remote?player={entity})
   w.localStorage.clear();
   w.history.pushState(null, "", "/remote?player=media_player.bed_appletv");
