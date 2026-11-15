@@ -1429,6 +1429,95 @@ function ptr(w, el, type, x = 100, y = 100) {
     pk.remove();
   }
 
+  // ---- EL: Edit remote + shortcut navigation (0.2.9) ---------------------------
+  {
+    check("EL1 show_edit_link defaults off", H.normaliseConfig({ players: ["media_player.kodi"] }).show_edit_link === false);
+    check("EL2 show_edit_link must be true or false", bad({ players: ["media_player.kodi"], show_edit_link: "yes" }));
+    const nav = H.normaliseShortcuts([{ name: "Lights", icon: "mdi:lightbulb", navigation_path: "  /lovelace/lights  " }], 0)[0];
+    const link = H.normaliseShortcuts([{ name: "Docs", url: "https://example.com/docs" }], 0)[0];
+    check("EL3 navigation_path is a navigate shortcut with no service call",
+      nav.kind === "navigate" && nav.navigate === "/lovelace/lights" && nav.icon === "mdi:lightbulb" && nav.input === false && nav.steps.length === 0 && H.shortcutSteps(nav, "x").length === 0);
+    check("EL4 url is a link shortcut", link.kind === "link" && link.url === "https://example.com/docs" && link.input === false);
+    const scBad = (sc) => { try { H.normaliseShortcuts([sc], 0); return false; } catch (e) { return true; } };
+    check("EL5 navigation shortcuts reject a mix, a bad url, and an empty path",
+      scBad({ name: "A", navigation_path: "/a", url: "https://example.com" }) &&
+      scBad({ name: "A", navigation_path: "/a", service: "light.turn_on" }) &&
+      scBad({ name: "A", url: "javascript:alert(1)" }) &&
+      scBad({ name: "A", navigation_path: "  " }) &&
+      scBad({ name: "A", url: "not a url" }) &&
+      scBad({ name: "A", navigation_path: "/a", action: "search" }));
+
+    const ed = C.getConfigElement();
+    w.document.body.appendChild(ed);
+    let edited = null;
+    ed.addEventListener("config-changed", (e) => { edited = e.detail.config; });
+    const base = { layout: "card", players: [{ entity: "media_player.kodi", platform: "kodi", shortcuts: [{ name: "Lights", icon: "mdi:lightbulb", navigation_path: "/lovelace/lights" }] }] };
+    ed.setConfig(JSON.parse(JSON.stringify(base)));
+    const tog = ed.shadowRoot.querySelector("[data-edit-link]");
+    check("EL6 the editor toggle is off until set", tog && !tog.checked && tog.parentElement.textContent.includes("Show Edit remote in the menu"));
+    tog.click();
+    check("EL7 turning it on writes show_edit_link and keeps the shortcut",
+      edited && edited.show_edit_link === true && edited.layout === "card" && eq(edited.players, base.players) && !base.show_edit_link, edited);
+    const nm = ed.shadowRoot.querySelector("[data-sc-edit-name]");
+    nm.value = "Lamps";
+    nm.dispatchEvent(new w.Event("input", { bubbles: true }));
+    check("EL8 renaming a navigation shortcut keeps navigation_path",
+      edited.players[0].shortcuts[0].name === "Lamps" && edited.players[0].shortcuts[0].navigation_path === "/lovelace/lights" && edited.players[0].shortcuts[0].icon === "mdi:lightbulb" && edited.show_edit_link === true);
+    ed.shadowRoot.querySelector("[data-edit-link]").click();
+    check("EL9 turning it off removes the key", edited && !("show_edit_link" in edited) && edited.players[0].shortcuts[0].navigation_path === "/lovelace/lights");
+    ed.remove();
+
+    const here = w.location.pathname + w.location.search + w.location.hash;
+    const seen = [];
+    const onLoc = (e) => seen.push(e.detail);
+    w.addEventListener("location-changed", onLoc);
+    w.localStorage.clear();
+    let m = mount(w, { players: [{ entity: "media_player.kodi", platform: "kodi" }] }, states());
+    m.$(".more").click(); await sleep(10);
+    check("EL10 without the option, More has no Edit remote", ![...m.card.shadowRoot.querySelectorAll(".menu .nm")].some((n) => n.textContent === "Edit remote"));
+    m.card.remove();
+    w.history.pushState(null, "", "/remote?player=media_player.kodi#top");
+    w.localStorage.clear();
+    m = mount(w, { show_edit_link: true, players: [{ entity: "media_player.kodi", platform: "kodi", more: false }] }, states());
+    check("EL11 more: false still shows the menu button", !m.$(".more").classList.contains("gone"));
+    m.$(".more").click(); await sleep(10);
+    const editItem = [...m.card.shadowRoot.querySelectorAll(".menu .mi")].find((b) => b.querySelector(".nm") && b.querySelector(".nm").textContent === "Edit remote");
+    check("EL12 the only row is Edit remote", !!editItem && m.card.shadowRoot.querySelectorAll(".menu .mi").length === 1 && !editItem.classList.contains("grp"));
+    m.hass.calls.length = 0;
+    editItem.click(); await sleep(10);
+    check("EL13 Edit remote adds edit=1 and keeps the rest of the url, with no service call",
+      w.location.pathname === "/remote" && w.location.search === "?player=media_player.kodi&edit=1" && w.location.hash === "#top" &&
+      seen.length === 1 && seen[0] && seen[0].replace === false && m.hass.calls.length === 0, [w.location.pathname + w.location.search + w.location.hash, seen]);
+    m.card.remove();
+    w.localStorage.clear();
+    m = mount(w, { show_edit_link: true, players: [{ entity: "media_player.lg_g5", platform: "webostv" }] }, states());
+    m.$(".more").click(); await sleep(10);
+    check("EL14 another player has Edit remote too", [...m.card.shadowRoot.querySelectorAll(".menu .nm")].some((n) => n.textContent === "Edit remote"));
+    m.card.remove();
+    w.history.pushState(null, "", "/remote");
+    w.localStorage.clear();
+    const opened = [];
+    const prevOpen = w.open;
+    w.open = (url, target, features) => { opened.push([url, target, features]); return null; };
+    m = mount(w, { players: [
+      { entity: "media_player.kodi", platform: "kodi", shortcuts: [{ name: "Lights", navigation_path: "/lovelace/lights" }, { name: "Docs", url: "https://example.com/docs" }] },
+    ] }, states());
+    m.$(".more").click(); await sleep(10);
+    seen.length = 0;
+    m.hass.calls.length = 0;
+    [...m.card.shadowRoot.querySelectorAll(".menu .mi")].find((b) => b.textContent.includes("Lights")).click(); await sleep(10);
+    check("EL15 navigation_path moves to that path and does not call a service",
+      w.location.pathname === "/lovelace/lights" && m.hass.calls.length === 0 && seen.length === 1 && seen[0].replace === false, w.location.pathname);
+    m.$(".more").click(); await sleep(10);
+    [...m.card.shadowRoot.querySelectorAll(".menu .mi")].find((b) => b.textContent.includes("Docs")).click(); await sleep(10);
+    check("EL16 url opens in a new tab", eq(opened, [["https://example.com/docs", "_blank", "noopener,noreferrer"]]), opened);
+    w.open = prevOpen;
+    m.card.remove();
+    w.history.pushState(null, "", here || "/remote");
+    w.removeEventListener("location-changed", onLoc);
+    w.localStorage.clear();
+  }
+
   // URL pick (Sidebar Mini Player remote_path: /remote?player={entity})
   w.localStorage.clear();
   w.history.pushState(null, "", "/remote?player=media_player.bed_appletv");
