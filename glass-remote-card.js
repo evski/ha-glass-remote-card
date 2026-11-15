@@ -75,7 +75,10 @@
  * are unchanged. The card had no visual editor; it now has one, with "Home button opens custom app"
  * on a webOS player, with an app-id field (placeholder com.mbs.communityhome). Off removes the key. The same editor
  * lists each player's shortcuts (name, icon, remove). Name and icon edits leave the rest of the shortcut as written.
- * On webOS, Add shortcut picks an app from source_list and saves media_player.select_source. Why: Evan's LG
+ * On webOS, Add shortcut picks an app from source_list and saves media_player.select_source.
+ * show_edit_link adds "Edit remote" to every player's More menu (current path with ?edit=1, via
+ * history.pushState and location-changed). A shortcut may use navigation_path or url instead of a service.
+ * Why: Evan's LG
  * G5 runs a custom launcher (com.mbs.communityhome) and a long press should still reach the real LG Home.
  * 0.2.8 (Grok Bot, 15 Nov 2026): LG webOS keyboard sends one change at a time. What: the typing sheet
  * used to send the whole box on every update with com.webos.service.ime/insertText and replace: 1, and
@@ -404,6 +407,9 @@
     // show_mic (0.1.6, Grok Bot 11 Oct 2026): the mic button opened the same text box as the keyboard button
     if (out.show_mic === undefined) out.show_mic = false;
     if (typeof out.show_mic !== "boolean") throw new Error("glass-remote-card: show_mic must be true or false");
+    // 0.2.9: Edit remote in every player's More menu. Off unless asked, so a kiosk dashboard is unchanged.
+    if (out.show_edit_link === undefined) out.show_edit_link = false;
+    if (typeof out.show_edit_link !== "boolean") throw new Error("glass-remote-card: show_edit_link must be true or false");
     // channel_timeout (0.1.4, Grok Bot 11 Oct 2026): ms before an expanded CH stack folds back; 0 = never
     if (out.channel_timeout === undefined) out.channel_timeout = 5000;
     if (typeof out.channel_timeout !== "number" || out.channel_timeout < 0) throw new Error("glass-remote-card: channel_timeout must be milliseconds (0 = never)");
@@ -602,11 +608,35 @@
     return raw.map((sc, j) => {
       const where = `glass-remote-card: players[${i}].shortcuts[${j}]`;
       if (!sc || typeof sc !== "object" || !sc.name) throw new Error(`${where} needs a name`);
+      if (sc.input !== undefined && typeof sc.input !== "boolean") throw new Error(`${where}.input must be true or false`);
+      // 0.2.9: navigation_path (this dashboard) or url (new tab) instead of a service call.
+      const navRaw = sc.navigation_path, urlRaw = sc.url;
+      const hasNav = navRaw != null && navRaw !== false;
+      const hasUrl = urlRaw != null && urlRaw !== false;
+      if (hasNav && typeof navRaw !== "string") throw new Error(`${where}.navigation_path must be a path`);
+      if (hasUrl && typeof urlRaw !== "string") throw new Error(`${where}.url must be an http(s) link`);
+      const nav = hasNav ? navRaw.trim() : "";
+      const link = hasUrl ? urlRaw.trim() : "";
+      if (hasNav && !nav) throw new Error(`${where}.navigation_path must be a path`);
+      if (hasUrl && !link) throw new Error(`${where}.url must be an http(s) link`);
+      if (nav && link) throw new Error(`${where} has both navigation_path and url; use one`);
       // `action` is the shortcut kind (search | call); an HA-style "domain.service" there is taken as the service
       let kind = sc.action, svc = sc.service;
       if (typeof kind === "string" && kind.includes(".")) { svc = svc || kind; kind = undefined; }
       const list = sc.actions || sc.sequence || (svc ? [{ service: svc, data: sc.data, target: sc.target }] : null);
-      if (!Array.isArray(list) || !list.length) throw new Error(`${where} needs a service (or a list under actions)`);
+      if ((nav || link) && list) throw new Error(`${where} cannot mix a service with navigation_path or url`);
+      if (nav || link) {
+        if (kind === "search") throw new Error(`${where} cannot ask for text and also navigate`);
+        if (link) {
+          let parsed;
+          try { parsed = new URL(link); } catch (e) { throw new Error(`${where}.url must be an http(s) link`); }
+          if (parsed.protocol !== "http:" && parsed.protocol !== "https:") throw new Error(`${where}.url must be an http(s) link`);
+        }
+        return { name: String(sc.name), icon: sc.icon || null, kind: nav ? "navigate" : "link",
+          prompt: null, placeholder: null, input: sc.input === true, steps: [],
+          navigate: nav || null, url: link || null };
+      }
+      if (!Array.isArray(list) || !list.length) throw new Error(`${where} needs a service, navigation_path, or url`);
       const steps = list.map((a, k) => {
         const name = String((a && (a.service || a.action)) || "");
         if (!/^[a-z0-9_]+\.[a-z0-9_]+$/i.test(name)) throw new Error(`${where}: "${name}" isn't a domain.service${list.length > 1 ? ` (actions[${k}])` : ""}`);
@@ -616,7 +646,6 @@
       if (kind === undefined) kind = needsText ? "search" : "call";
       if (kind !== "search" && kind !== "call") throw new Error(`${where}.action must be search or call`);
       if (kind === "search" && !needsText) throw new Error(`${where} is a search but its data has no {text} placeholder`);
-      if (sc.input !== undefined && typeof sc.input !== "boolean") throw new Error(`${where}.input must be true or false`);
       return { name: String(sc.name), icon: sc.icon || (kind === "search" ? "search" : null), kind,
         prompt: sc.prompt ? String(sc.prompt) : null, placeholder: sc.placeholder ? String(sc.placeholder) : null,
         input: sc.input !== false, steps };
@@ -630,6 +659,20 @@
     });
   }
   const shortcutsFor = (p) => (p && Array.isArray(p.shortcuts) ? p.shortcuts : []);
+
+  /** Home Assistant's navigate(): pushState, then location-changed, so the dashboard follows without a reload. */
+  function haNavigate(path) {
+    history.pushState(null, "", path);
+    window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
+  }
+  /** Current view with ?edit=1, keeping any other query or hash. */
+  function dashboardEditPath() {
+    let href = "/";
+    try { href = window.location.href; } catch (e) { /* no location */ }
+    const url = new URL(href, "http://localhost");
+    url.searchParams.set("edit", "1");
+    return url.pathname + url.search + url.hash;
+  }
 
   // 0.2.1 (Grok Bot, 11 Oct 2026): Info sits in the row's 5th slot when CH doesn't use it and the player has an info key
   const hasInfoButton = (p, states) => p.info_button !== false && !hasChannels(p) && stepsFor(p, "info", states || {}).length > 0;
@@ -1295,13 +1338,17 @@
         </section>`;
       }).join("");
       const empty = rows ? "" : `<p class="na">Add a player under <code>players:</code> in the YAML.</p>`;
-      this.shadowRoot.innerHTML = `<style>${EDITOR_CSS}</style><div class="ed"><p class="note">Home button on LG webOS, and shortcuts. Other options are edited as YAML.</p>${rows}${empty}</div>`;
+      const editOn = !!(this._config && this._config.show_edit_link);
+      const edit = `<label class="row"><input type="checkbox" role="switch" data-edit-link${editOn ? " checked" : ""}><span class="switch" aria-hidden="true"></span><span>Show Edit remote in the menu</span></label>`;
+      this.shadowRoot.innerHTML = `<style>${EDITOR_CSS}</style><div class="ed"><p class="note">Home button on LG webOS, and shortcuts. Other options are edited as YAML.</p>${edit}${rows}${empty}</div>`;
       this.shadowRoot.querySelectorAll("ha-icon-picker").forEach((el) => { el.value = el.getAttribute("value") || ""; });
       this._rendering = false;
     }
     _sync() {
       const rows = this._rows();
       this._rendering = true;
+      const edit = this.shadowRoot.querySelector("[data-edit-link]");
+      if (edit) edit.checked = !!(this._config && this._config.show_edit_link);
       this.shadowRoot.querySelectorAll("[data-player]").forEach((row) => {
         const p = asPlayer(rows[+row.dataset.player]);
         const box = row.querySelector("[data-home-toggle]");
@@ -1357,6 +1404,7 @@
     _onChange(e) {
       if (this._rendering) return;
       this._onToggle(e);
+      if (e.target.matches && e.target.matches("[data-edit-link]")) this._emitEditLink(e.target.checked);
       if (e.target.matches && e.target.matches("[data-sc-source]")) this._onSource(e.target);
     }
     _onToggle(e) {
@@ -1461,6 +1509,15 @@
       const sig = this._sigOf(config);
       if (sig !== this._sig) { this._sig = sig; this._render(); }
       else this._sync();
+    }
+    /** Card-level. Off removes the key so the YAML stays at the default. */
+    _emitEditLink(on) {
+      const config = JSON.parse(JSON.stringify(this._config || {}));
+      if (on) config.show_edit_link = true;
+      else delete config.show_edit_link;
+      this._config = config;
+      this.dispatchEvent(new CustomEvent("config-changed", { detail: { config }, bubbles: true, composed: true }));
+      this._sync();
     }
     /** Write home_app onto player `index` (empty removes it). Other keys are kept. */
     _emit(index, id) {
@@ -1697,6 +1754,16 @@
     runShortcut(p, sc, text) {
       if (!p || !sc) return Promise.resolve();
       if (sc.kind === "search" && text === undefined) { this._openSearch(p, sc); return Promise.resolve(); }
+      const go = () => {
+        if (sc.kind === "navigate") haNavigate(sc.navigate);
+        else if (sc.kind === "link") window.open(sc.url, "_blank", "noopener,noreferrer");
+      };
+      if (sc.kind === "navigate" || sc.kind === "link") {
+        const sw = sc.input && !this._switching && !this._controlOnly(p) ? inputSteps(p, "shortcut", this._states, false) : [];
+        if (!sw.length) { go(); return Promise.resolve(); }
+        this._switching = true;
+        return this._call(sw).finally(() => { this._switching = false; go(); });
+      }
       const sw = sc.input && !this._switching && !this._controlOnly(p) ? inputSteps(p, "shortcut", this._states, false) : [];
       const steps = [...sw, ...shortcutSteps(sc, text || "")];
       if (!sw.length) return this._call(steps);
@@ -1886,6 +1953,8 @@
           run: it.open ? () => this._openMenu(it.open, this.shadowRoot.querySelector(".more"))
             : it.pin ? () => this._openPin(p) : () => this._call(it.steps), // 0.2.5: PIN Pad sheet
         }));
+        // 0.2.9: card-level. Same item on every player, so a hidden header can still open the editor.
+        if (this._config.show_edit_link) items.push({ name: "Edit remote", icon: "settings", grp: sc.length + items.length > 0, run: () => haNavigate(dashboardEditPath()) });
         if (!sc.length && !items.length) return null;
         return { title: null, items: [...sc, ...items] };
       }
@@ -2066,8 +2135,7 @@
       else if (act === "pin-send") this._pinSubmit();
       else if (act === "exit") {
         this._closeSheets();
-        history.pushState(null, "", this._config.exit_path);
-        window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
+        haNavigate(this._config.exit_path);
       }
     }
     // ---- PIN pad (0.2.5, Grok Bot 15 Oct 2026) ------------------------------------
@@ -2248,7 +2316,7 @@
       r.querySelector(".kbd").style.display = textable ? "" : "none";
       // bottom row: sources | -10 | ... | +10 | CH (each slot keeps its place when hidden)
       r.querySelector(".src").classList.toggle("gone", !sourceMenu(p, this._states));
-      r.querySelector(".more").classList.toggle("gone", !moreItems(p, this._states).length && !shortcutsFor(p).length); // 0.2.0: shortcuts alone keep it
+      r.querySelector(".more").classList.toggle("gone", !moreItems(p, this._states).length && !shortcutsFor(p).length && !this._config.show_edit_link); // 0.2.0: shortcuts alone keep it; 0.2.9: Edit remote does too
       const chOk = hasChannels(p);
       r.querySelector(".ch").classList.toggle("gone", !chOk);
       if (!chOk && this._chOpen) this._setChOpen(false);

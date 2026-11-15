@@ -148,6 +148,7 @@ source_map:                               # optional: follow the TV's input
 | `source_map` | – | `entity` (the TV), `sources` (input → player), `ignore_sources` (inputs that fall through to ranking), `default_to_tv` (`true`: any other source selects the TV). |
 | `exit_path` | `/` | Where **Exit remote** goes. |
 | `show_exit` | `true` | Show **Exit remote** in the picker (full screen only). |
+| `show_edit_link` | `false` | Add **Edit remote** to every player's ⋯ menu. It opens this view in the dashboard editor (`?edit=1`), so you can still edit when the header is hidden. The visual editor has the same toggle. |
 | `url_param` | `player` | URL parameter that pre-selects a player, e.g. `/remote/0?player=media_player.kodi`. |
 | `haptics` | `true` | Haptic feedback in the companion apps. |
 | `id` | – | Optional key that keeps the manual pick separate when you have several remote cards. |
@@ -305,6 +306,8 @@ There are two kinds:
 | `action` | `search` or `call`. If you leave it out, it's `search` when the data contains a text placeholder and `call` otherwise. |
 | `prompt` | Search: the sheet's title (defaults to `name`). `placeholder` sets the hint inside the box (default *Search*). |
 | `service`, `data`, `target` | The call to make. For several calls in a row, use `actions:` with a list of `{service, data, target}`. |
+| `navigation_path` | Go to a dashboard path instead of calling a service, for example `/lovelace/lights`. Uses the same navigation as **Exit remote**. |
+| `url` | Open an `http` or `https` link in a new tab instead of calling a service. Use one of `service`, `navigation_path` or `url`. |
 | `input` | Run this player's [input switching](#input-switching) first (inputs with `triggers: [shortcut]` or `[any]`). Default `true`. |
 
 Text placeholders work in any string inside `data` or `target`:
@@ -326,6 +329,18 @@ In the visual editor each player has a **Shortcuts** section. Shortcuts already 
 ```
 
 On other players, new shortcuts are still written in YAML.
+
+A shortcut can go somewhere instead of calling a service. `navigation_path` opens another dashboard view. `url` opens a link in a new tab.
+
+```yaml
+shortcuts:
+  - name: Lights
+    icon: mdi:lightbulb
+    navigation_path: /lovelace/lights
+  - name: Docs
+    icon: mdi:web
+    url: https://www.home-assistant.io/integrations/webostv/
+```
 
 **Example (Kodi add-on):** these shortcuts open a video add-on's movie search, TV search and a list page in Kodi through `kodi.call_method` with `GUI.ActivateWindow`. They use the Umbrella add-on's plugin URLs only as an example. Any add-on that takes `plugin://` URLs works the same way; check the add-on's own docs or source for its action names.
 
