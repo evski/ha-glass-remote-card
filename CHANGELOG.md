@@ -9,6 +9,7 @@ All notable changes to this project are documented here. The format follows
 ### Added
 - **`home_app`** on an LG webOS player (`platform: webostv`). Set it to a webOS app id, for example `com.mbs.communityhome`. A short press of Home launches that app by id (`webostv.command`, `system.launcher/launch`, payload `{id}`). A long press of Home sends the TV's Home button, which is what a short press did before, and does not also fire the short press. Leave `home_app` out and Home is unchanged: a short press is Home and a long press is Menu. Other players are unchanged. `actions.home` and `actions.home_hold` still override those presses.
 - A visual editor for this option. The card didn't have one. On an LG webOS player it shows **Home button opens custom app**. Turn it on and a text field asks for the app id (placeholder `com.mbs.communityhome`). Turn it off and `home_app` is removed. An empty app id is ignored. Other options stay in YAML.
+- The visual editor also has a **Shortcuts** section on each player. Existing shortcuts show their name and icon, which can be changed, and **Remove**. The rest of a shortcut is left as written. On an LG webOS player, **Add shortcut** picks an app from the player's source list and saves `media_player.select_source` for that source (name defaults to the app, icon defaults to `mdi:apps`).
 
 ## [0.2.8] - 2026-11-15
 
