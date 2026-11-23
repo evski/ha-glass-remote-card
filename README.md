@@ -540,7 +540,12 @@ kiosk_mode:
 - **LG rewind/fast-forward** change playback speed; they don't jump 10 seconds.
 - **The manual pick is stored per device** (local storage), not shared between phones.
 
+## Apple Watch remote
+
+A companion [watchOS app](watchos/) lives in this repository. It is a standalone Apple Watch remote that calls the same Home Assistant script (`script.remote_button`): a borderless swipe-and-tap touch pad, Digital Crown volume, a device picker, now-playing artwork and dictation. See [watchos/README.md](watchos/README.md) for the example script, how to create a long-lived access token, and how to build the app with XcodeGen and a free Apple ID (Personal Team builds expire after 7 days).
+
 ## Development
+
 
 ```bash
 npm ci
