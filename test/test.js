@@ -703,9 +703,13 @@ function ptr(w, el, type, x = 100, y = 100) {
     // NAME1 (Grok Bot, 11 Oct 2026): every text file in the repo (README, docs, templates, workflows, examples, scripts, the card),
     // not just the card source. "Apple TV" (device / HA integration name) and "Apple Inc" (trademark notice) are the only allowed uses.
     // This test file is skipped because it has to spell the words out to look for them.
+    // Files under watchos/ are skipped (23 Nov 2026, Evan's request): that folder is a
+    // companion smartwatch app whose sources have to name the platform. The ban still
+    // applies to every other text file. A watchos/ path (e.g. watchos/README.md) may
+    // appear outside that folder as a link to it; that path is not treated as the product name.
     const BANNED = /\b(?:iPhone|iOS|iPad|iPadOS|Safari|macOS|Mac OS|watchOS|tvOS|Apple Watch|Siri|SF Symbols|SF Pro|Liquid Glass|-apple-system)\b/i;
     const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => {
-      if ([".git", "node_modules"].includes(e.name)) return [];
+      if ([".git", "node_modules", "watchos"].includes(e.name)) return [];
       const p = path.join(d, e.name);
       return e.isDirectory() ? walk(p) : [p];
     });
@@ -713,7 +717,9 @@ function ptr(w, el, type, x = 100, y = 100) {
     const hits = [];
     for (const f of textFiles) fs.readFileSync(f, "utf8").split("\n").forEach((line, i) => {
       const rel = path.relative(ROOT, f) + ":" + (i + 1);
-      if (BANNED.test(line)) hits.push(rel + " " + line.match(BANNED)[0]);
+      // Allow "watchos/" only as a directory path (link to the skipped folder).
+      const lineForBan = line.replace(/watchos\//gi, "");
+      if (BANNED.test(lineForBan)) hits.push(rel + " " + lineForBan.match(BANNED)[0]);
       if (/Apple(?! TV|%20TV| Inc)/.test(line)) hits.push(rel + " Apple"); // %20 = URL-encoded "Apple TV" in screenshot URLs
       if (/Apple Inc/.test(line) && !/trademark/i.test(line)) hits.push(rel + " Apple Inc outside the trademark notice");
     });
