@@ -1,3 +1,8 @@
 node_modules/
 *.log
 .DS_Store
+
+# smartwatch app, see watchos/.gitignore: never commit a real HA token or generated Xcode project
+watchos/Config/Secrets.xcconfig
+watchos/*.xcodeproj/
+watchos/build/

@@ -1,0 +1,7 @@
+// Base.xcconfig - build settings shared by Debug and Release.
+// Optional, gitignored Secrets.xcconfig prefills the HA URL + token so you
+// don't have to type a ~180-character token on the watch. Without it the app
+// simply starts on the Settings screen.
+HA_BASE_URL =
+HA_TOKEN =
+#include? "Secrets.xcconfig"

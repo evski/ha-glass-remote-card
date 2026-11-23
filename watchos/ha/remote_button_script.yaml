@@ -1,0 +1,385 @@
+# =============================================================================
+# remote_button_script.yaml  —  script.remote_button
+#
+# EXAMPLE configuration. Replace every entity id marked below with your own
+# before you load this into Home Assistant. The same ids must be used in
+# WatchRemote/Models.swift.
+#
+# WHAT: one script, script.remote_button, that presses a remote button (or
+#       sends text) on whichever player sensor.remote_player currently names.
+#       Example players in this file (change these):
+#         media_player.lounge_apple_tv   Lounge Apple TV  (remote.lounge_apple_tv)
+#         media_player.kodi              Kodi             (kodi.call_method)
+#         media_player.lounge_tv         LG webOS TV      (webostv.button)
+#         media_player.bedroom_apple_tv  Bedroom Apple TV (remote.bedroom_apple_tv)
+#       Example volume routing: lounge players use media_player.lounge_avr when
+#       it is 'on', otherwise the LG TV. The bedroom Apple TV uses its own
+#       volume commands and has no mute (a no-op here). Adjust to taste.
+#
+# WHY:  Device routing stays in Home Assistant, so the watch app (and the HA
+#       Companion Watch Actions, or anything else) just calls
+#       script.remote_button with {button: ..., text: ...}.
+#
+# HOW TO INSTALL:
+#   - As a package: copy to /config/packages/ and enable
+#     `homeassistant.packages: !include_dir_named packages` (or similar), then
+#     Developer tools > YAML > Reload scripts. Or paste the `remote_button`
+#     script into Settings > Automations & scenes > Scripts (UI / scripts.yaml).
+#   - You also need a template sensor named sensor.remote_player whose state is
+#     the active media_player entity id, and an input_select named
+#     input_select.remote_target whose options are `auto` plus those same
+#     entity ids (a manual pick can hold for a few hours, then return to auto).
+#
+# UNDO: delete the script (or this package file) and reload scripts.
+# =============================================================================
+script:
+  remote_button:
+    alias: "Remote: press button (watch remote)"
+    description: >-
+      EXAMPLE script. Presses one remote button (or sends text) on the player
+      named by sensor.remote_player. Replace the example entity ids to match
+      your media players, remotes and AVR. Used by the Apple Watch remote app
+      in this repository (watchos/) and by HA Companion Watch Actions.
+    icon: mdi:remote-tv
+    # queued (not single): d-pad swipes and Digital Crown volume steps arrive in
+    # quick bursts and every press must land, in order. max caps a runaway crown.
+    mode: queued
+    max: 15
+    max_exceeded: silent
+    fields:
+      # button: the logical key. Names match the watch app. *_long = hold action.
+      button:
+        name: Button
+        description: Logical remote key to press on the active player.
+        required: true
+        example: select
+        selector:
+          select:
+            options:
+              - up
+              - down
+              - left
+              - right
+              - select
+              - back
+              - back_long
+              - home
+              - home_long
+              - play_pause
+              - skip_back
+              - skip_fwd
+              - info
+              - subtitles
+              - subtitles_long
+              - volume_up
+              - volume_down
+              - mute
+              - power
+              - text
+      text:
+        name: Text
+        description: Text to put in the active player's focused text field.
+        required: false
+        example: Hello
+        selector:
+          text: {}
+      submit:
+        name: Submit
+        description: Press Enter/Done after sending the text.
+        required: false
+        default: false
+        selector:
+          boolean:
+
+    # -------------------------------------------------------------------------
+    # Variables: resolve the active player once per press and build the key
+    # tables. Every entity id here is an EXAMPLE — replace them.
+    # -------------------------------------------------------------------------
+    variables:
+      btn: "{{ button | default('') | string | lower }}"
+      txt: "{{ text | default('') | string }}"
+      do_submit: "{{ submit | default(false) | bool(false) }}"
+      p: "{{ states('sensor.remote_player') }}"
+      # EXAMPLE: lounge AVR used for volume/mute when it is on.
+      arcam: media_player.lounge_avr
+      # EXAMPLE: lounge LG webOS TV, used as the volume fallback and for webOS keys.
+      lg: media_player.lounge_tv
+      lounge_vol: >-
+        {{ 'media_player.lounge_avr'
+           if is_state('media_player.lounge_avr', 'on')
+           else 'media_player.lounge_tv' }}
+      # EXAMPLE player ids — keep these in sync with WatchRemote/Models.swift.
+      kind: >-
+        {% if p in ['media_player.lounge_apple_tv', 'media_player.bedroom_apple_tv'] %}apple_tv
+        {%- elif p == 'media_player.kodi' %}kodi
+        {%- elif p == 'media_player.lounge_tv' %}webos
+        {%- else %}none{% endif %}
+      atv_remote: >-
+        {{ {'media_player.lounge_apple_tv': 'remote.lounge_apple_tv',
+            'media_player.bedroom_apple_tv': 'remote.bedroom_apple_tv'}.get(p, '') }}
+      # Config entry id for apple_tv.set_keyboard_text. config_entry_id() looks
+      # it up from the player entity so you do not have to hard-code it. If that
+      # is empty, paste the id from Settings > Devices & services > Apple TV
+      # (it appears in the URL) as a placeholder replacement.
+      atv_entry: "{{ config_entry_id(p) if p not in ['unknown', 'unavailable', ''] else '' }}"
+      # Apple TV: remote.send_command keys (pyatv). info/subtitles = 'down'
+      # (opens the info panel during playback).
+      atv_keys:
+        up: up
+        down: down
+        left: left
+        right: right
+        select: select
+        back: menu
+        back_long: top_menu
+        home: home
+        home_long: control_center
+        skip_back: skip_backward
+        skip_fwd: skip_forward
+        info: down
+        subtitles: down
+      # Kodi: kodi.call_method methods with no extra params (seek/subtitles
+      # need params and have their own branches below).
+      kodi_methods:
+        up: Input.Up
+        down: Input.Down
+        left: Input.Left
+        right: Input.Right
+        select: Input.Select
+        back: Input.Back
+        home: Input.Home
+        home_long: Input.ContextMenu
+        info: Input.Info
+      # LG webOS: webostv.button names.
+      lg_buttons:
+        up: UP
+        down: DOWN
+        left: LEFT
+        right: RIGHT
+        select: ENTER
+        back: BACK
+        home: HOME
+        home_long: MENU
+        info: INFO
+        subtitles: CC
+        skip_back: REWIND
+        skip_fwd: FASTFORWARD
+
+    sequence:
+      - choose:
+          # =================================================================
+          # TEXT (dictation from the watch). Replaces the focused field's text.
+          # Optional submit. The device ignores text when no field is open.
+          # =================================================================
+          - alias: "Text -> Apple TV (set_keyboard_text)"
+            conditions:
+              - "{{ (btn == 'text' or txt != '') and kind == 'apple_tv' }}"
+            sequence:
+              - action: apple_tv.set_keyboard_text
+                data:
+                  config_entry_id: "{{ atv_entry }}"
+                  text: "{{ txt }}"
+              - if: "{{ do_submit }}"
+                then:
+                  - action: remote.send_command
+                    target:
+                      entity_id: "{{ atv_remote }}"
+                    data:
+                      command: select
+          - alias: "Text -> Kodi (Input.SendText)"
+            conditions:
+              - "{{ (btn == 'text' or txt != '') and kind == 'kodi' }}"
+            sequence:
+              - action: kodi.call_method
+                target:
+                  # EXAMPLE
+                  entity_id: media_player.kodi
+                data:
+                  method: Input.SendText
+                  text: "{{ txt }}"
+                  done: "{{ do_submit }}"
+          - alias: "Text -> LG (webOS IME insertText)"
+            conditions:
+              - "{{ (btn == 'text' or txt != '') and kind == 'webos' }}"
+            sequence:
+              - action: webostv.command
+                target:
+                  # EXAMPLE
+                  entity_id: media_player.lounge_tv
+                data:
+                  command: com.webos.service.ime/insertText
+                  payload:
+                    text: "{{ txt }}"
+                    replace: true
+              - if: "{{ do_submit }}"
+                then:
+                  - action: webostv.command
+                    target:
+                      entity_id: media_player.lounge_tv
+                    data:
+                      command: com.webos.service.ime/sendEnterKey
+
+          # =================================================================
+          # VOLUME. Bedroom Apple TV: its own remote volume commands.
+          # Lounge players: AVR if it is on, otherwise the LG TV.
+          # =================================================================
+          - alias: "Volume -> Bedroom Apple TV remote"
+            conditions:
+              - "{{ btn in ['volume_up', 'volume_down'] and p == 'media_player.bedroom_apple_tv' }}"
+            sequence:
+              - action: remote.send_command
+                target:
+                  # EXAMPLE
+                  entity_id: remote.bedroom_apple_tv
+                data:
+                  command: "{{ btn }}"
+          - alias: "Volume -> Lounge (AVR, else TV)"
+            conditions:
+              - "{{ btn in ['volume_up', 'volume_down'] and kind != 'none' }}"
+            sequence:
+              - action: "media_player.{{ btn }}"
+                target:
+                  entity_id: "{{ lounge_vol }}"
+
+          # =================================================================
+          # MUTE. Lounge players toggle is_volume_muted on the AVR/TV.
+          # The example bedroom Apple TV has no mute, so that is a no-op.
+          # =================================================================
+          - alias: "Mute -> Bedroom Apple TV: none"
+            conditions:
+              - "{{ btn == 'mute' and p == 'media_player.bedroom_apple_tv' }}"
+            sequence:
+              - stop: "Bedroom Apple TV has no mute in this example script."
+          - alias: "Mute -> Lounge (AVR, else TV) toggle"
+            conditions:
+              - "{{ btn == 'mute' and kind != 'none' }}"
+            sequence:
+              - action: media_player.volume_mute
+                target:
+                  entity_id: "{{ lounge_vol }}"
+                data:
+                  is_volume_muted: "{{ not state_attr(lounge_vol, 'is_volume_muted') }}"
+
+          # =================================================================
+          # POWER. ATV: wakeup if off/standby else suspend; Kodi: shutdown menu;
+          # LG: media_player.toggle.
+          # =================================================================
+          - alias: "Power -> Apple TV wake/suspend"
+            conditions:
+              - "{{ btn == 'power' and kind == 'apple_tv' }}"
+            sequence:
+              - action: remote.send_command
+                target:
+                  entity_id: "{{ atv_remote }}"
+                data:
+                  command: "{{ 'wakeup' if states(p) in ['off', 'standby'] else 'suspend' }}"
+          - alias: "Power -> Kodi shutdown menu"
+            conditions:
+              - "{{ btn == 'power' and kind == 'kodi' }}"
+            sequence:
+              - action: kodi.call_method
+                target:
+                  # EXAMPLE
+                  entity_id: media_player.kodi
+                data:
+                  method: GUI.ActivateWindow
+                  window: shutdownmenu
+          - alias: "Power -> LG toggle"
+            conditions:
+              - "{{ btn == 'power' and kind == 'webos' }}"
+            sequence:
+              - action: media_player.toggle
+                target:
+                  # EXAMPLE
+                  entity_id: media_player.lounge_tv
+
+          # =================================================================
+          # PLAY/PAUSE. Apple TV + LG -> media_player.media_play_pause;
+          # Kodi -> Player.PlayPause playerid 1.
+          # =================================================================
+          - alias: "Play/pause -> Kodi"
+            conditions:
+              - "{{ btn == 'play_pause' and kind == 'kodi' }}"
+            sequence:
+              - action: kodi.call_method
+                target:
+                  # EXAMPLE
+                  entity_id: media_player.kodi
+                data:
+                  method: Player.PlayPause
+                  playerid: 1
+          - alias: "Play/pause -> Apple TV / LG media player"
+            conditions:
+              - "{{ btn == 'play_pause' and kind in ['apple_tv', 'webos'] }}"
+            sequence:
+              - action: media_player.media_play_pause
+                target:
+                  entity_id: "{{ p }}"
+
+          # =================================================================
+          # Kodi special keys with params: 10 s seek, subtitles (tap = show
+          # dialog, hold = next subtitle track).
+          # =================================================================
+          - alias: "Kodi seek -10 / +10 s"
+            conditions:
+              - "{{ btn in ['skip_back', 'skip_fwd'] and kind == 'kodi' }}"
+            sequence:
+              - action: kodi.call_method
+                target:
+                  # EXAMPLE
+                  entity_id: media_player.kodi
+                data:
+                  method: Player.Seek
+                  playerid: 1
+                  value:
+                    seconds: "{{ -10 if btn == 'skip_back' else 10 }}"
+          - alias: "Kodi subtitles"
+            conditions:
+              - "{{ btn in ['subtitles', 'subtitles_long'] and kind == 'kodi' }}"
+            sequence:
+              - action: kodi.call_method
+                target:
+                  # EXAMPLE
+                  entity_id: media_player.kodi
+                data:
+                  method: Input.ExecuteAction
+                  action: "{{ 'nextsubtitle' if btn == 'subtitles_long' else 'showsubtitles' }}"
+
+          # =================================================================
+          # Plain keys via the per-platform tables above (d-pad, select, back,
+          # home, info, skip on ATV/LG, subtitles on ATV/LG). A key with no
+          # mapping on the current platform falls through to the default no-op.
+          # =================================================================
+          - alias: "Apple TV key (remote.send_command)"
+            conditions:
+              - "{{ kind == 'apple_tv' and btn in atv_keys }}"
+            sequence:
+              - action: remote.send_command
+                target:
+                  entity_id: "{{ atv_remote }}"
+                data:
+                  command: "{{ atv_keys[btn] }}"
+          - alias: "Kodi key (kodi.call_method)"
+            conditions:
+              - "{{ kind == 'kodi' and btn in kodi_methods }}"
+            sequence:
+              - action: kodi.call_method
+                target:
+                  # EXAMPLE
+                  entity_id: media_player.kodi
+                data:
+                  method: "{{ kodi_methods[btn] }}"
+          - alias: "LG key (webostv.button)"
+            conditions:
+              - "{{ kind == 'webos' and btn in lg_buttons }}"
+            sequence:
+              - action: webostv.button
+                target:
+                  # EXAMPLE
+                  entity_id: media_player.lounge_tv
+                data:
+                  button: "{{ lg_buttons[btn] }}"
+        # Unknown button, unmapped key, or no active player: do nothing quietly
+        # (no error, so a stray press from the watch does not raise a 500).
+        default:
+          - stop: "No mapping for this button on the active player."
