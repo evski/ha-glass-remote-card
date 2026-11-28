@@ -1265,6 +1265,408 @@ function ptr(w, el, type, x = 100, y = 100) {
     f.card.remove(); w.localStorage.clear();
   }
 
+  // ---- HA: LG webOS home_app (0.2.9) ------------------------------------------
+  {
+    const launch = (entity, id = "com.mbs.communityhome") => ["webostv", "command", { entity_id: entity, command: "system.launcher/launch", payload: { id } }];
+    const btn = (entity, button) => ["webostv", "button", { entity_id: entity, button }];
+    const plain = H.normaliseConfig({ players: [{ entity: "media_player.lg_g5", platform: "webostv" }] }).players[0];
+    check("HA1 no home_app: short press is the HOME button", eq(H.stepsFor(plain, "home", S), [btn("media_player.lg_g5", "HOME")]));
+    check("HA2 no home_app: long press stays MENU", eq(H.stepsFor(plain, "home_hold", S), [btn("media_player.lg_g5", "MENU")]));
+    const app = H.normaliseConfig({ players: [{ entity: "media_player.lg_g5", home_app: "  com.mbs.communityhome  " }] }).players[0];
+    check("HA3 guessed webOS player, id trimmed", app.platform === "webostv" && app.home_app === "com.mbs.communityhome");
+    check("HA4 short press launches that app by id", eq(H.stepsFor(app, "home", S), [launch("media_player.lg_g5")]));
+    check("HA5 long press sends the HOME button", eq(H.stepsFor(app, "home_hold", S), [btn("media_player.lg_g5", "HOME")]));
+    const blanksOk = ["", "   ", false, null].every((blank) => {
+      const p = H.normaliseConfig({ players: [{ entity: "media_player.lg_g5", platform: "webostv", home_app: blank }] }).players[0];
+      return !("home_app" in p) && H.stepsFor(p, "home", S)[0][2].button === "HOME" && H.stepsFor(p, "home_hold", S)[0][2].button === "MENU";
+    });
+    check("HA6 blank home_app is dropped", blanksOk);
+    check("HA7 home_app must be a string", bad({ players: [{ entity: "media_player.lg_g5", platform: "webostv", home_app: { id: "com.mbs.communityhome" } }] }));
+    check("HA8 home_app on another platform is rejected", bad({ players: [{ entity: "media_player.kodi", platform: "kodi", home_app: "com.mbs.communityhome" }] }) &&
+      bad({ players: [{ entity: "media_player.lr_appletv", platform: "apple_tv", remote: "remote.lr_appletv", home_app: "com.mbs.communityhome" }] }));
+    const over = { ...app, actions: { home: { service: "script.turn_on", target: { entity_id: "script.lg_home" } }, home_hold: { service: "script.lg_hold" } } };
+    check("HA9 actions.home still replaces the short press", eq(H.stepsFor(over, "home", S), [["script", "turn_on", { entity_id: "script.lg_home" }]]));
+    check("HA10 actions.home_hold still replaces the long press", eq(H.stepsFor(over, "home_hold", S), [["script", "lg_hold", {}]]));
+    check("HA11 other players' Home is unchanged",
+      eq(H.stepsFor(kd, "home", S), [["kodi", "call_method", { entity_id: "media_player.kodi", method: "Input.Home" }]]) &&
+      eq(H.stepsFor(kd, "home_hold", S), [["kodi", "call_method", { entity_id: "media_player.kodi", method: "Input.ContextMenu" }]]) &&
+      eq(H.stepsFor(atv, "home", S), [["remote", "send_command", { entity_id: "remote.lr_appletv", command: "home" }]]) &&
+      eq(H.stepsFor(atv, "home_hold", S), [["remote", "send_command", { entity_id: "remote.lr_appletv", command: "home", hold_secs: 1 }]]));
+    check("HA12 a stray home_app on another platform's key map does nothing",
+      eq(H.stepsFor({ ...kd, home_app: "com.mbs.communityhome" }, "home", S), [["kodi", "call_method", { entity_id: "media_player.kodi", method: "Input.Home" }]]));
+    const switched = H.normaliseConfig({ players: [{ entity: "media_player.lg_g5", platform: "webostv", home_app: "com.mbs.communityhome", input: { entity: "media_player.avr", source: "TV" } }] }).players[0];
+    check("HA13 Home still switches input before the app launches", H.inputSteps(switched, "home", states({ "media_player.avr": { attributes: { source: "Other" } } })).length === 1 &&
+      H.inputSteps(switched, "home_hold", states({ "media_player.avr": { attributes: { source: "Other" } } })).length === 1);
+
+    const tapHome = async (card, downMs) => {
+      const home = card.$('[data-key="home"]');
+      card.hass.calls.length = 0;
+      ptr(w, home, "pointerdown");
+      if (downMs) await sleep(downMs);
+      ptr(w, home, "pointerup");
+      await sleep(downMs ? 40 : 80);
+    };
+    w.localStorage.clear();
+    m = mount(w, { players: [{ entity: "media_player.lg_g5", platform: "webostv", home_app: "com.mbs.communityhome", name: "LG G5" }] }, states());
+    await tapHome(m, 0);
+    check("HA14 short press calls only the launch", eq(m.hass.calls, [launch("media_player.lg_g5")]), m.hass.calls);
+    await sleep(700);
+    check("HA15 short press does not later fire the long press", m.hass.calls.length === 1);
+    await tapHome(m, 400);
+    check("HA16 release before the hold is still only the launch", eq(m.hass.calls, [launch("media_player.lg_g5")]), m.hass.calls);
+    await sleep(400);
+    check("HA17 the cleared hold timer does not fire afterwards", m.hass.calls.length === 1);
+    m.hass.calls.length = 0;
+    ptr(w, m.$('[data-key="home"]'), "pointerdown");
+    await sleep(700);
+    check("HA18 holding Home sends HOME once, not the launch", eq(m.hass.calls, [btn("media_player.lg_g5", "HOME")]), m.hass.calls);
+    ptr(w, m.$('[data-key="home"]'), "pointerup");
+    await sleep(40);
+    check("HA19 releasing the long press does not also fire the short press", eq(m.hass.calls, [btn("media_player.lg_g5", "HOME")]), m.hass.calls);
+    m.card.remove();
+
+    w.localStorage.clear();
+    m = mount(w, { players: [{ entity: "media_player.lg_g5", platform: "webostv" }] }, states());
+    await tapHome(m, 0);
+    check("HA20 without home_app, a short press is still HOME", eq(m.hass.calls, [btn("media_player.lg_g5", "HOME")]), m.hass.calls);
+    m.hass.calls.length = 0;
+    ptr(w, m.$('[data-key="home"]'), "pointerdown"); await sleep(700); ptr(w, m.$('[data-key="home"]'), "pointerup"); await sleep(40);
+    check("HA21 without home_app, a long press is still one MENU", eq(m.hass.calls, [btn("media_player.lg_g5", "MENU")]), m.hass.calls);
+    m.card.remove();
+
+    w.localStorage.clear();
+    m = mount(w, { players: [{ entity: "media_player.kodi", platform: "kodi" }] }, states());
+    await tapHome(m, 0);
+    check("HA22 another player: short Home unchanged", eq(m.hass.calls, [["kodi", "call_method", { entity_id: "media_player.kodi", method: "Input.Home" }]]), m.hass.calls);
+    m.hass.calls.length = 0;
+    ptr(w, m.$('[data-key="home"]'), "pointerdown"); await sleep(700); ptr(w, m.$('[data-key="home"]'), "pointerup"); await sleep(40);
+    check("HA23 another player: long Home is one hold action", eq(m.hass.calls, [["kodi", "call_method", { entity_id: "media_player.kodi", method: "Input.ContextMenu" }]]), m.hass.calls);
+    m.card.remove();
+
+    w.localStorage.clear();
+    m = mount(w, { players: [{ entity: "media_player.lr_appletv", platform: "apple_tv", remote: "remote.lr_appletv" }] }, states());
+    m.hass.calls.length = 0;
+    ptr(w, m.$('[data-key="home"]'), "pointerdown"); await sleep(700); ptr(w, m.$('[data-key="home"]'), "pointerup"); await sleep(40);
+    check("HA24 remote Home long press is still one held home command", eq(m.hass.calls, [["remote", "send_command", { entity_id: "remote.lr_appletv", command: "home", hold_secs: 1 }]]), m.hass.calls);
+    m.card.remove();
+
+    w.localStorage.clear();
+    const ic = { players: [{ entity: "media_player.lg_g5", platform: "webostv", home_app: "com.mbs.communityhome", input: { entity: "media_player.avr", source: "TV", delay: 0 } }] };
+    m = mount(w, ic, states({ "media_player.avr": { state: "on", attributes: { source: "Other" } } }));
+    await tapHome(m, 0);
+    check("HA25 short press switches the input, then launches the app", eq(m.hass.calls, [
+      ["media_player", "select_source", { entity_id: "media_player.avr", source: "TV" }],
+      launch("media_player.lg_g5"),
+    ]), m.hass.calls);
+    m.card.remove();
+    w.localStorage.clear();
+  }
+
+  // ---- ED: visual editor (0.2.9; the card had none) ---------------------------
+  {
+    const events = [];
+    const ed = C.getConfigElement();
+    check("ED1 getConfigElement returns the editor", ed && ed.tagName === "GLASS-REMOTE-CARD-EDITOR" && C.getConfigElement() !== ed);
+    w.document.body.appendChild(ed);
+    ed.addEventListener("config-changed", (e) => events.push(e));
+    const base = {
+      type: "custom:glass-remote-card",
+      layout: "fullscreen",
+      players: [
+        { entity: "media_player.kodi", platform: "kodi", volume_entity: "media_player.avr", shortcuts: [{ name: "Movies", service: "script.movies", data: { q: "{text}" } }] },
+        "media_player.lg_oled",
+        { entity: "media_player.living_room_tv", name: "Lounge TV", input: { entity: "media_player.avr", source: "TV" } },
+      ],
+    };
+    ed.hass = { states: { "media_player.lg_oled": { state: "on", attributes: { friendly_name: "LG OLED" } } } };
+    ed.setConfig(base);
+    const row = (entity) => [...ed.shadowRoot.querySelectorAll(".player")].find((n) => n.querySelector(".ent").textContent === entity);
+    const kodiRow = row("media_player.kodi");
+    const lgRow = row("media_player.lg_oled");
+    const tvRow = row("media_player.living_room_tv");
+    check("ED2 note says other options stay in YAML", /Other options are edited as YAML/.test(ed.shadowRoot.querySelector(".note").textContent));
+    check("ED3 non-webOS players have no toggle", !kodiRow.querySelector("[data-home-toggle]") && !tvRow.querySelector("[data-home-toggle]") &&
+      kodiRow.querySelector(".na").textContent === "The Home button option is only for LG webOS.");
+    check("ED4 a guessed LG player shows the toggle, off, with the app id hidden",
+      lgRow.querySelector(".who").textContent === "LG OLED" && !lgRow.querySelector("[data-home-toggle]").checked && lgRow.querySelector("[data-home-field]").hidden);
+    check("ED5 placeholder is the app id", lgRow.querySelector("[data-home-app]").getAttribute("placeholder") === "com.mbs.communityhome");
+    lgRow.querySelector("[data-home-toggle]").click();
+    check("ED6 turning the toggle on shows the field and does not write a key", events.length === 0 && !lgRow.querySelector("[data-home-field]").hidden && lgRow.querySelector("[data-home-toggle]").checked);
+    const appInput = lgRow.querySelector("[data-home-app]");
+    appInput.value = "   ";
+    appInput.dispatchEvent(new w.Event("input", { bubbles: true }));
+    check("ED7 a blank app id is ignored", events.length === 0);
+    appInput.value = "com.mbs.communityhome";
+    appInput.dispatchEvent(new w.Event("input", { bubbles: true }));
+    const saved = events[0];
+    check("ED8 config-changed bubbles out of the editor", saved && saved.bubbles && saved.composed && saved.detail && saved.detail.config);
+    const cfg = saved.detail.config;
+    check("ED9 app id is set and every other key is kept", cfg.type === "custom:glass-remote-card" && cfg.layout === "fullscreen" &&
+      eq(cfg.players[0], base.players[0]) && cfg.players[1].entity === "media_player.lg_oled" && cfg.players[1].home_app === "com.mbs.communityhome" &&
+      eq(cfg.players[2], base.players[2]), cfg);
+    check("ED10 the original config object is not mutated", !base.players[1].home_app && base.players[1] === "media_player.lg_oled");
+    const norm = H.normaliseConfig(cfg).players[1];
+    check("ED11 editor output launches by that id", eq(H.stepsFor(norm, "home", S), [["webostv", "command", { entity_id: "media_player.lg_oled", command: "system.launcher/launch", payload: { id: "com.mbs.communityhome" } }]]) &&
+      H.stepsFor(norm, "home_hold", S)[0][2].button === "HOME");
+    ed.setConfig(cfg);
+    check("ED12 echoing the config keeps the toggle on and the id", lgRow.querySelector("[data-home-toggle]").checked && lgRow.querySelector("[data-home-app]").value === "com.mbs.communityhome");
+    appInput.value = "";
+    appInput.dispatchEvent(new w.Event("input", { bubbles: true }));
+    const cleared = events[events.length - 1].detail.config;
+    check("ED13 clearing the field removes home_app but leaves the toggle open", cleared.players[1] === "media_player.lg_oled" &&
+      lgRow.querySelector("[data-home-toggle]").checked && !lgRow.querySelector("[data-home-field]").hidden, cleared.players[1]);
+    ed.setConfig(cleared);
+    check("ED14 a round trip with no app id keeps the open field", lgRow.querySelector("[data-home-toggle]").checked && lgRow.querySelector("[data-home-app]").value === "" && !lgRow.querySelector("[data-home-field]").hidden);
+    lgRow.querySelector("[data-home-toggle]").click();
+    check("ED15 turning the toggle off with no app id writes nothing more", events.length === 2 && lgRow.querySelector("[data-home-field]").hidden && !lgRow.querySelector("[data-home-toggle]").checked);
+    ed.setConfig({
+      players: [
+        { entity: "media_player.one", platform: "webostv", name: "One", home_app: "netflix", volume_entity: "media_player.avr" },
+        { entity: "media_player.two", platform: "webostv", name: "Two" },
+      ],
+    });
+    const one = row("media_player.one"), two = row("media_player.two");
+    check("ED16 an existing app id opens the toggle and fills the field", one.querySelector("[data-home-toggle]").checked && one.querySelector("[data-home-app]").value === "netflix" &&
+      !two.querySelector("[data-home-toggle]").checked && two.querySelector("[data-home-field]").hidden);
+    one.querySelector("[data-home-toggle]").click();
+    const off = events[events.length - 1].detail.config;
+    check("ED17 turning it off removes only that player's key", off.players[0].entity === "media_player.one" && off.players[0].name === "One" &&
+      off.players[0].volume_entity === "media_player.avr" && !("home_app" in off.players[0]) && eq(off.players[1], { entity: "media_player.two", platform: "webostv", name: "Two" }) &&
+      one.querySelector("[data-home-field]").hidden, off.players);
+    two.querySelector("[data-home-toggle]").click();
+    two.querySelector("[data-home-app]").value = "com.mbs.communityhome";
+    two.querySelector("[data-home-app]").dispatchEvent(new w.Event("input", { bubbles: true }));
+    const second = events[events.length - 1].detail.config;
+    check("ED18 the other LG player can set its own app", second.players[1].home_app === "com.mbs.communityhome" && !("home_app" in second.players[0]), second.players);
+    ed.remove();
+
+    const sh = C.getConfigElement();
+    w.document.body.appendChild(sh);
+    let shorthand = null;
+    sh.addEventListener("config-changed", (e) => { shorthand = e.detail.config; });
+    sh.setConfig({ entity: "media_player.lg_tv", layout: "card", pick_timeout: 180 });
+    check("ED19 entity shorthand for an LG player shows the toggle", sh.shadowRoot.querySelector("[data-home-toggle]") && !sh.shadowRoot.querySelector("[data-home-toggle]").checked);
+    sh.shadowRoot.querySelector("[data-home-toggle]").click();
+    sh.shadowRoot.querySelector("[data-home-app]").value = "com.mbs.communityhome";
+    sh.shadowRoot.querySelector("[data-home-app]").dispatchEvent(new w.Event("input", { bubbles: true }));
+    check("ED20 shorthand becomes a player with home_app, other card keys kept", shorthand && !shorthand.entity && shorthand.layout === "card" && shorthand.pick_timeout === 180 &&
+      eq(shorthand.players, [{ entity: "media_player.lg_tv", home_app: "com.mbs.communityhome" }]), shorthand);
+    sh.remove();
+
+    const none = C.getConfigElement();
+    none.setConfig({});
+    check("ED21 no players yet: a YAML hint, no toggle", !none.shadowRoot.querySelector("[data-home-toggle]") && /players:/.test(none.shadowRoot.textContent));
+
+    // Shortcuts in the visual editor. Existing YAML is kept; only name and icon are edited.
+    const movies = {
+      name: "Search Movies", icon: "mdi:movie-search", prompt: "Search movies", placeholder: "Title", input: false,
+      service: "kodi.call_method",
+      data: { entity_id: "media_player.kodi", method: "GUI.ActivateWindow", window: "videos", parameters: ["plugin://plugin.video.umbrella/?action=movieSearchterm&name={text_url}", "return"] },
+    };
+    const trakt = {
+      name: "Trakt Progress",
+      actions: [{ service: "kodi.call_method", data: { method: "GUI.ActivateWindow", window: "videos" }, target: { entity_id: "media_player.kodi" } }],
+    };
+    const scEd = C.getConfigElement();
+    w.document.body.appendChild(scEd);
+    const scEvents = [];
+    scEd.addEventListener("config-changed", (e) => scEvents.push(e.detail.config));
+    scEd.hass = { states: {
+      "media_player.lg_g5": { state: "on", attributes: { friendly_name: "LG G5", source_list: ["Netflix", "YouTube", "Home"] } },
+      "media_player.kodi": { state: "on", attributes: { friendly_name: "Kodi" } },
+    } };
+    scEd.setConfig({
+      type: "custom:glass-remote-card",
+      players: [
+        { entity: "media_player.kodi", platform: "kodi", volume_entity: "media_player.avr", shortcuts: [movies, trakt] },
+        { entity: "media_player.lg_g5", platform: "webostv", name: "LG G5", shortcuts: [{ name: "Guide", icon: "mdi:television-guide", service: "script.guide", data: { x: 1 }, prompt: "Guide" }] },
+      ],
+    });
+    const scRow = (entity) => [...scEd.shadowRoot.querySelectorAll(".player")].find((n) => n.querySelector(".ent").textContent === entity);
+    const kRow = scRow("media_player.kodi");
+    const gRow = scRow("media_player.lg_g5");
+    check("ED22 each player lists shortcuts with name, icon and remove, and an Add shortcut row",
+      kRow.querySelector(".sc-h").textContent === "Shortcuts" && kRow.querySelectorAll("[data-sc]").length === 2 &&
+      kRow.querySelector("[data-sc-edit-name]").value === "Search Movies" && kRow.querySelector("[data-sc-edit-icon]").value === "mdi:movie-search" &&
+      kRow.querySelector("[data-sc-remove]") && kRow.querySelector("[data-sc-add-btn]").textContent === "Add shortcut" &&
+      gRow.querySelectorAll("[data-sc]").length === 1 && gRow.querySelector("[data-sc-add-btn]").textContent === "Add shortcut");
+    check("ED23 rendering shortcuts does not rewrite the config", scEvents.length === 0);
+    check("ED24 other players have no app picker", !kRow.querySelector("[data-sc-source]") && kRow.querySelector("[data-sc-add-btn]").disabled);
+    const nm = kRow.querySelectorAll("[data-sc-edit-name]")[0];
+    nm.value = "Films";
+    nm.dispatchEvent(new w.Event("input", { bubbles: true }));
+    const renamed = scEvents[0].players[0].shortcuts;
+    check("ED25 renaming keeps service, data, prompt and the other shortcut",
+      renamed[0].name === "Films" && renamed[0].icon === "mdi:movie-search" && renamed[0].prompt === "Search movies" &&
+      renamed[0].placeholder === "Title" && renamed[0].input === false && renamed[0].service === "kodi.call_method" &&
+      eq(renamed[0].data, movies.data) && eq(renamed[1], trakt), renamed);
+    check("ED26 the untouched player is unchanged", eq(scEvents[0].players[1].shortcuts, [{ name: "Guide", icon: "mdi:television-guide", service: "script.guide", data: { x: 1 }, prompt: "Guide" }]));
+    const icn = kRow.querySelectorAll("[data-sc-edit-icon]")[1];
+    icn.value = "mdi:progress-check";
+    icn.dispatchEvent(new w.Event("input", { bubbles: true }));
+    const iconned = scEvents[1].players[0].shortcuts[1];
+    check("ED27 setting an icon on a shortcut that had none keeps its actions",
+      iconned.name === "Trakt Progress" && iconned.icon === "mdi:progress-check" && eq(iconned.actions, trakt.actions), iconned);
+    icn.value = "";
+    icn.dispatchEvent(new w.Event("input", { bubbles: true }));
+    check("ED28 clearing the icon removes only that key", !("icon" in scEvents[2].players[0].shortcuts[1]) && eq(scEvents[2].players[0].shortcuts[1].actions, trakt.actions));
+    nm.value = "   ";
+    nm.dispatchEvent(new w.Event("input", { bubbles: true }));
+    check("ED29 a blank name is not written", scEvents.length === 3 && scEvents[2].players[0].shortcuts[0].name === "Films");
+    kRow.querySelectorAll("[data-sc-remove]")[0].click();
+    const left = scEvents[3].players[0];
+    const kAfter = scRow("media_player.kodi");
+    check("ED30 remove drops that shortcut and leaves the other and the player keys",
+      left.shortcuts.length === 1 && left.shortcuts[0].name === "Trakt Progress" && eq(left.shortcuts[0].actions, trakt.actions) &&
+      left.volume_entity === "media_player.avr" && left.entity === "media_player.kodi" &&
+      kAfter.querySelector("[data-sc-edit-name]").value === "Trakt Progress", left);
+    check("ED31 the other player's shortcut survived the remove", eq(scEvents[3].players[1].shortcuts[0], { name: "Guide", icon: "mdi:television-guide", service: "script.guide", data: { x: 1 }, prompt: "Guide" }));
+    const gLive = () => scRow("media_player.lg_g5");
+    const src = gLive().querySelector("[data-sc-source]");
+    check("ED32 webOS add row lists the entity source_list", eq([...src.options].map((o) => o.value), ["", "Netflix", "YouTube", "Home"]));
+    src.value = "Netflix";
+    src.dispatchEvent(new w.Event("change", { bubbles: true }));
+    check("ED33 picking an app defaults the name to that source and enables Add",
+      gLive().querySelector("[data-sc-add-name]").value === "Netflix" && !gLive().querySelector("[data-sc-add-btn]").disabled &&
+      gLive().querySelector("[data-sc-add-icon]").value === "mdi:apps");
+    gLive().querySelector("[data-sc-add-btn]").click();
+    const addedCfg = scEvents[4];
+    const added = addedCfg.players[1].shortcuts;
+    check("ED34 add appends select_source and does not touch the existing shortcut",
+      added.length === 2 && eq(added[0], { name: "Guide", icon: "mdi:television-guide", service: "script.guide", data: { x: 1 }, prompt: "Guide" }) &&
+      eq(added[1], { name: "Netflix", icon: "mdi:apps", service: "media_player.select_source", data: { entity_id: "media_player.lg_g5", source: "Netflix" } }), added);
+    const normSc = H.normaliseConfig(addedCfg).players[1].shortcuts[1];
+    check("ED35 the added shortcut normalises to one select_source call",
+      eq(H.shortcutSteps(normSc, ""), [["media_player", "select_source", { entity_id: "media_player.lg_g5", source: "Netflix" }]]));
+    scEd.setConfig(addedCfg);
+    const g2 = scRow("media_player.lg_g5");
+    check("ED36 round trip shows the new shortcut", g2.querySelectorAll("[data-sc-edit-name]")[1].value === "Netflix" && g2.querySelectorAll("[data-sc]").length === 2);
+    g2.querySelector("[data-sc-source]").value = "YouTube";
+    g2.querySelector("[data-sc-source]").dispatchEvent(new w.Event("change", { bubbles: true }));
+    g2.querySelector("[data-sc-add-name]").value = "Films";
+    g2.querySelector("[data-sc-add-icon]").value = "mdi:youtube";
+    g2.querySelector("[data-sc-add-btn]").click();
+    const custom = scEvents[5].players[1].shortcuts[2];
+    check("ED37 a typed name and icon are stored with the chosen source",
+      eq(custom, { name: "Films", icon: "mdi:youtube", service: "media_player.select_source", data: { entity_id: "media_player.lg_g5", source: "YouTube" } }), custom);
+    const g3 = scRow("media_player.lg_g5");
+    g3.querySelector("[data-sc-source]").value = "YouTube";
+    scEd.hass = { states: { "media_player.lg_g5": { state: "on", attributes: { source_list: ["Netflix", "YouTube", "Home", "Disney+"] } }, "media_player.kodi": { state: "on", attributes: {} } } };
+    check("ED38 a later source_list refresh adds the new app and keeps the selection",
+      [...g3.querySelector("[data-sc-source]").options].some((o) => o.value === "Disney+") &&
+      g3.querySelector("[data-sc-source]").value === "YouTube");
+    scEd.remove();
+
+    class FakeIconPicker extends w.HTMLElement {
+      set value(v) { this._v = v == null ? "" : String(v); }
+      get value() { return this._v || ""; }
+    }
+    if (!w.customElements.get("ha-icon-picker")) w.customElements.define("ha-icon-picker", FakeIconPicker);
+    const pk = C.getConfigElement();
+    w.document.body.appendChild(pk);
+    let picked = null;
+    pk.addEventListener("config-changed", (e) => { picked = e.detail.config; });
+    pk.setConfig({ players: [{ entity: "media_player.lg_g5", platform: "webostv", shortcuts: [movies] }] });
+    const picker = pk.shadowRoot.querySelector("ha-icon-picker[data-sc-edit-icon]");
+    const addPicker = pk.shadowRoot.querySelector("ha-icon-picker[data-sc-add-icon]");
+    check("ED39 ha-icon-picker is used when it is registered", picker && picker.value === "mdi:movie-search" && addPicker && addPicker.value === "mdi:apps" && !pk.shadowRoot.querySelector("input[data-sc-edit-icon]"));
+    picker.value = "mdi:film";
+    picker.dispatchEvent(new w.CustomEvent("value-changed", { bubbles: true, detail: { value: "mdi:film" } }));
+    check("ED40 a picker change updates the icon and leaves the Kodi shortcut body",
+      picked && picked.players[0].shortcuts[0].icon === "mdi:film" && picked.players[0].shortcuts[0].service === "kodi.call_method" &&
+      eq(picked.players[0].shortcuts[0].data, movies.data) && picked.players[0].shortcuts[0].prompt === "Search movies", picked && picked.players[0].shortcuts[0]);
+    pk.remove();
+  }
+
+  // ---- EL: Edit remote + shortcut navigation (0.2.9) ---------------------------
+  {
+    check("EL1 show_edit_link defaults off", H.normaliseConfig({ players: ["media_player.kodi"] }).show_edit_link === false);
+    check("EL2 show_edit_link must be true or false", bad({ players: ["media_player.kodi"], show_edit_link: "yes" }));
+    const nav = H.normaliseShortcuts([{ name: "Lights", icon: "mdi:lightbulb", navigation_path: "  /lovelace/lights  " }], 0)[0];
+    const link = H.normaliseShortcuts([{ name: "Docs", url: "https://example.com/docs" }], 0)[0];
+    check("EL3 navigation_path is a navigate shortcut with no service call",
+      nav.kind === "navigate" && nav.navigate === "/lovelace/lights" && nav.icon === "mdi:lightbulb" && nav.input === false && nav.steps.length === 0 && H.shortcutSteps(nav, "x").length === 0);
+    check("EL4 url is a link shortcut", link.kind === "link" && link.url === "https://example.com/docs" && link.input === false);
+    const scBad = (sc) => { try { H.normaliseShortcuts([sc], 0); return false; } catch (e) { return true; } };
+    check("EL5 navigation shortcuts reject a mix, a bad url, and an empty path",
+      scBad({ name: "A", navigation_path: "/a", url: "https://example.com" }) &&
+      scBad({ name: "A", navigation_path: "/a", service: "light.turn_on" }) &&
+      scBad({ name: "A", url: "javascript:alert(1)" }) &&
+      scBad({ name: "A", navigation_path: "  " }) &&
+      scBad({ name: "A", url: "not a url" }) &&
+      scBad({ name: "A", navigation_path: "/a", action: "search" }));
+
+    const ed = C.getConfigElement();
+    w.document.body.appendChild(ed);
+    let edited = null;
+    ed.addEventListener("config-changed", (e) => { edited = e.detail.config; });
+    const base = { layout: "card", players: [{ entity: "media_player.kodi", platform: "kodi", shortcuts: [{ name: "Lights", icon: "mdi:lightbulb", navigation_path: "/lovelace/lights" }] }] };
+    ed.setConfig(JSON.parse(JSON.stringify(base)));
+    const tog = ed.shadowRoot.querySelector("[data-edit-link]");
+    check("EL6 the editor toggle is off until set", tog && !tog.checked && tog.parentElement.textContent.includes("Show Edit remote in the menu"));
+    tog.click();
+    check("EL7 turning it on writes show_edit_link and keeps the shortcut",
+      edited && edited.show_edit_link === true && edited.layout === "card" && eq(edited.players, base.players) && !base.show_edit_link, edited);
+    const nm = ed.shadowRoot.querySelector("[data-sc-edit-name]");
+    nm.value = "Lamps";
+    nm.dispatchEvent(new w.Event("input", { bubbles: true }));
+    check("EL8 renaming a navigation shortcut keeps navigation_path",
+      edited.players[0].shortcuts[0].name === "Lamps" && edited.players[0].shortcuts[0].navigation_path === "/lovelace/lights" && edited.players[0].shortcuts[0].icon === "mdi:lightbulb" && edited.show_edit_link === true);
+    ed.shadowRoot.querySelector("[data-edit-link]").click();
+    check("EL9 turning it off removes the key", edited && !("show_edit_link" in edited) && edited.players[0].shortcuts[0].navigation_path === "/lovelace/lights");
+    ed.remove();
+
+    const here = w.location.pathname + w.location.search + w.location.hash;
+    const seen = [];
+    const onLoc = (e) => seen.push(e.detail);
+    w.addEventListener("location-changed", onLoc);
+    w.localStorage.clear();
+    let m = mount(w, { players: [{ entity: "media_player.kodi", platform: "kodi" }] }, states());
+    m.$(".more").click(); await sleep(10);
+    check("EL10 without the option, More has no Edit remote", ![...m.card.shadowRoot.querySelectorAll(".menu .nm")].some((n) => n.textContent === "Edit remote"));
+    m.card.remove();
+    w.history.pushState(null, "", "/remote?player=media_player.kodi#top");
+    w.localStorage.clear();
+    m = mount(w, { show_edit_link: true, players: [{ entity: "media_player.kodi", platform: "kodi", more: false }] }, states());
+    check("EL11 more: false still shows the menu button", !m.$(".more").classList.contains("gone"));
+    m.$(".more").click(); await sleep(10);
+    const editItem = [...m.card.shadowRoot.querySelectorAll(".menu .mi")].find((b) => b.querySelector(".nm") && b.querySelector(".nm").textContent === "Edit remote");
+    check("EL12 the only row is Edit remote", !!editItem && m.card.shadowRoot.querySelectorAll(".menu .mi").length === 1 && !editItem.classList.contains("grp"));
+    m.hass.calls.length = 0;
+    editItem.click(); await sleep(10);
+    check("EL13 Edit remote adds edit=1 and keeps the rest of the url, with no service call",
+      w.location.pathname === "/remote" && w.location.search === "?player=media_player.kodi&edit=1" && w.location.hash === "#top" &&
+      seen.length === 1 && seen[0] && seen[0].replace === false && m.hass.calls.length === 0, [w.location.pathname + w.location.search + w.location.hash, seen]);
+    m.card.remove();
+    w.localStorage.clear();
+    m = mount(w, { show_edit_link: true, players: [{ entity: "media_player.lg_g5", platform: "webostv" }] }, states());
+    m.$(".more").click(); await sleep(10);
+    check("EL14 another player has Edit remote too", [...m.card.shadowRoot.querySelectorAll(".menu .nm")].some((n) => n.textContent === "Edit remote"));
+    m.card.remove();
+    w.history.pushState(null, "", "/remote");
+    w.localStorage.clear();
+    const opened = [];
+    const prevOpen = w.open;
+    w.open = (url, target, features) => { opened.push([url, target, features]); return null; };
+    m = mount(w, { players: [
+      { entity: "media_player.kodi", platform: "kodi", shortcuts: [{ name: "Lights", navigation_path: "/lovelace/lights" }, { name: "Docs", url: "https://example.com/docs" }] },
+    ] }, states());
+    m.$(".more").click(); await sleep(10);
+    seen.length = 0;
+    m.hass.calls.length = 0;
+    [...m.card.shadowRoot.querySelectorAll(".menu .mi")].find((b) => b.textContent.includes("Lights")).click(); await sleep(10);
+    check("EL15 navigation_path moves to that path and does not call a service",
+      w.location.pathname === "/lovelace/lights" && m.hass.calls.length === 0 && seen.length === 1 && seen[0].replace === false, w.location.pathname);
+    m.$(".more").click(); await sleep(10);
+    [...m.card.shadowRoot.querySelectorAll(".menu .mi")].find((b) => b.textContent.includes("Docs")).click(); await sleep(10);
+    check("EL16 url opens in a new tab", eq(opened, [["https://example.com/docs", "_blank", "noopener,noreferrer"]]), opened);
+    w.open = prevOpen;
+    m.card.remove();
+    w.history.pushState(null, "", here || "/remote");
+    w.removeEventListener("location-changed", onLoc);
+    w.localStorage.clear();
+  }
+
   // URL pick (Sidebar Mini Player remote_path: /remote?player={entity})
   w.localStorage.clear();
   w.history.pushState(null, "", "/remote?player=media_player.bed_appletv");

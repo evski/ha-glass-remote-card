@@ -40,7 +40,7 @@ One card drives Kodi, LG webOS TVs, devices from Home Assistant's Apple TV integ
   - **More (⋯)** holds info (unless the device has the Info button on the row), subtitles, sound mode and each platform's extras.
   - **PIN Pad** in the More menu (Apple TV players by default, while YouTube is open): type a code on a number pad and the card enters it on an app's own on-screen number grid, such as YouTube's parent code screen, where no keyboard comes up. See [PIN pad](#pin-pad).
   - **Shortcuts** you define per player (an add-on search, a favourite list, a scene) appear as the first section of the More menu while that player is active. Search shortcuts ask for text in the typing sheet first. See [Shortcuts](#shortcuts).
-  - Play/pause, a big Back button and Home underneath. Long-press Back for the top menu and Home for the platform's extra action.
+  - Play/pause, a big Back button and Home underneath. Long-press Back for the top menu and Home for the platform's extra action. On an LG webOS player, `home_app` makes a short press of Home open that app, and a long press open the TV's Home. See [Home button on LG webOS](#home-button-on-lg-webos).
 - **Volume tabs on the pad's edge.** Holding a tab repeats. Press and hold the speaker badge between the tabs to pick the receiver's **sound mode**. Volume can go to a receiver, with a fallback when the receiver is off, or through the player's `remote` entity (HDMI-CEC/IR).
 - **Keyboard and dictation.**
   - The keyboard button opens a text box (a separate mic button is available with `show_mic: true`). When the player can report keyboard focus (a `keyboard_sensor`, such as the one from the Apple TV integration, or Kodi's keyboard window seen by the poll), the text box only opens while a text field is selected. Otherwise a small glass hint says "No text field selected", and the box closes by itself when the field goes away. Players that can't report focus, like LG webOS, always open it.
@@ -148,6 +148,7 @@ source_map:                               # optional: follow the TV's input
 | `source_map` | – | `entity` (the TV), `sources` (input → player), `ignore_sources` (inputs that fall through to ranking), `default_to_tv` (`true`: any other source selects the TV). |
 | `exit_path` | `/` | Where **Exit remote** goes. |
 | `show_exit` | `true` | Show **Exit remote** in the picker (full screen only). |
+| `show_edit_link` | `false` | Add **Edit remote** to every player's ⋯ menu. It opens this view in the dashboard editor (`?edit=1`), so you can still edit when the header is hidden. The visual editor has the same toggle. |
 | `url_param` | `player` | URL parameter that pre-selects a player, e.g. `/remote/0?player=media_player.kodi`. |
 | `haptics` | `true` | Haptic feedback in the companion apps. |
 | `id` | – | Optional key that keeps the manual pick separate when you have several remote cards. |
@@ -174,6 +175,7 @@ source_map:                               # optional: follow the TV's input
 | `switch_input` | `true` by default. `false` = never run this player's `input` switching; the buttons just control it. |
 | `pin_pad` | On by default for `apple_tv`, shown while the player is in YouTube: a **PIN Pad** item in More that enters a code on an app's on-screen number grid. `false` hides it; `true` or an object adds it to other players with arrow keys. See [PIN pad](#pin-pad). |
 | `info_button` | `true` by default: an Info (i) button in the bottom row's right-hand slot when the player has no CH control. While it shows, `info` is left out of that player's More menu. `false` hides it and puts Info back in More. |
+| `home_app` | `webostv` only. A webOS app id. A short press of Home launches it; a long press sends the TV's Home button. Leave it out and Home is unchanged (short press Home, long press Menu). See [Home button on LG webOS](#home-button-on-lg-webos). |
 | `keyboard_poll` | Kodi: how often (ms) to check whether Kodi's on-screen keyboard is open. Default `2000`; `0` turns it off. Also settable on the card. See [Kodi keyboard detection](#kodi-keyboard-detection). |
 | `keyboard_poll_during_video` | Kodi: keep checking while a video plays. Default `false`. |
 | `actions` | Override any button: `up`, `down`, `left`, `right`, `select`, `select_hold`, `back`, `back_hold`, `home`, `home_hold`, `play_pause`, `skip_back`, `skip_fwd`, `info`, `subtitles`, `channel_up`, `channel_down`, `power`, `power_on` (used when the player is off), `power_off` (used when it's on), `volume_up`, `volume_down`, `mute`, `text`. Each takes `{service, data, target}` or a list of them. In `text`, the value `$text` is replaced with what you typed. |
@@ -190,6 +192,22 @@ source_map:                               # optional: follow the TV's input
       text:
         service: notify.my_tv
         data: { message: $text }
+```
+
+### Home button on LG webOS
+
+`home_app` is for an LG webOS player. Set it to the webOS app id (the player's `app_id`, not the name in the source list). A short press of Home launches that app. A long press of Home sends the TV's Home button, which is what a short press does when `home_app` is left out. Leave it out and nothing changes: a short press is Home and a long press is Menu. Other players are unchanged.
+
+The app is launched by id with `webostv.command` and `system.launcher/launch` (`payload: {id}`), so it does not depend on the source list or on the name the TV shows for the app.
+
+In the visual editor, an LG webOS player has **Home button opens custom app**. Turn it on and enter the app id. Turn it off and `home_app` is removed. The toggle is shown when `platform` is `webostv`, or when the platform is left out and the entity id is guessed as one (it contains `lg` or `webos`). The same editor also edits [shortcuts](#shortcuts). Everything else is still YAML.
+
+`actions.home` still replaces the short press, and `actions.home_hold` still replaces the long press. The TV menu stays under More → **TV Settings**.
+
+```yaml
+  - entity: media_player.living_room_tv
+    platform: webostv
+    home_app: com.mbs.communityhome
 ```
 
 ## Sources, sound mode, More and CH
@@ -288,6 +306,8 @@ There are two kinds:
 | `action` | `search` or `call`. If you leave it out, it's `search` when the data contains a text placeholder and `call` otherwise. |
 | `prompt` | Search: the sheet's title (defaults to `name`). `placeholder` sets the hint inside the box (default *Search*). |
 | `service`, `data`, `target` | The call to make. For several calls in a row, use `actions:` with a list of `{service, data, target}`. |
+| `navigation_path` | Go to a dashboard path instead of calling a service, for example `/lovelace/lights`. Uses the same navigation as **Exit remote**. |
+| `url` | Open an `http` or `https` link in a new tab instead of calling a service. Use one of `service`, `navigation_path` or `url`. |
 | `input` | Run this player's [input switching](#input-switching) first (inputs with `triggers: [shortcut]` or `[any]`). Default `true`. |
 
 Text placeholders work in any string inside `data` or `target`:
@@ -296,6 +316,31 @@ Text placeholders work in any string inside `data` or `target`:
 - A value of exactly `$text` is replaced too, as in the `text` action.
 
 The card fills these in itself, so they work with any service, not only template-aware ones.
+
+In the visual editor each player has a **Shortcuts** section. Shortcuts already in the YAML are listed with a name, an icon and **Remove**. Changing the name or the icon leaves the rest of that shortcut as it was (`service`, `data`, `prompt`, `actions` and anything else). **Add shortcut** on an LG webOS player picks an app from that player's source list. The name starts as the app name and the icon starts as `mdi:apps` (an icon picker when Home Assistant provides one, otherwise a text field). Adding one saves:
+
+```yaml
+- name: Netflix
+  icon: mdi:apps
+  service: media_player.select_source
+  data:
+    entity_id: media_player.living_room_tv
+    source: Netflix
+```
+
+On other players, new shortcuts are still written in YAML.
+
+A shortcut can go somewhere instead of calling a service. `navigation_path` opens another dashboard view. `url` opens a link in a new tab.
+
+```yaml
+shortcuts:
+  - name: Lights
+    icon: mdi:lightbulb
+    navigation_path: /lovelace/lights
+  - name: Docs
+    icon: mdi:web
+    url: https://www.home-assistant.io/integrations/webostv/
+```
 
 **Example (Kodi add-on):** these shortcuts open a video add-on's movie search, TV search and a list page in Kodi through `kodi.call_method` with `GUI.ActivateWindow`. They use the Umbrella add-on's plugin URLs only as an example. Any add-on that takes `plugin://` URLs works the same way; check the add-on's own docs or source for its action names.
 
