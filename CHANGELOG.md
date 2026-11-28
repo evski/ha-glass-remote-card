@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [0.2.9] - 2026-11-15
+## [0.2.9] - 2026-11-28
 
 ### Added
 - **`home_app`** on an LG webOS player (`platform: webostv`). Set it to a webOS app id, for example `com.mbs.communityhome`. A short press of Home launches that app by id (`webostv.command`, `system.launcher/launch`, payload `{id}`). A long press of Home sends the TV's Home button, which is what a short press did before, and does not also fire the short press. Leave `home_app` out and Home is unchanged: a short press is Home and a long press is Menu. Other players are unchanged. `actions.home` and `actions.home_hold` still override those presses.
